@@ -6,12 +6,19 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 @main
 struct SimpleBotCilApp: App {
+    @StateObject private var serial = SerialManager()
+
+    init() {
+        FontLoader.register()
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AppView(serial: serial)
         }
     }
 }

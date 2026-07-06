@@ -1,0 +1,251 @@
+import SwiftUI
+
+struct SettingsView: View {
+    @State private var personality: PersonalityMode = .calm
+    @State private var appearance: AppearanceMode   = .system
+    @State private var language: LanguageMode       = .english
+    @State private var taskReminders      = true
+    @State private var calendarAlerts     = true
+    @State private var remindBefore       = 10
+    @State private var cameraAccess       = true
+    @State private var personalizationData = true
+
+    private let remindOptions = [5, 10, 15, 30]
+
+    var body: some View {
+        ScrollView {
+            Grid(alignment: .topLeading, horizontalSpacing: 24, verticalSpacing: 20) {
+                GridRow(alignment: .top) {
+                    personalityCard
+                    notificationsCard
+                }
+                GridRow(alignment: .top) {
+                    connectionCard
+                    privacyCard
+                }
+                GridRow(alignment: .top) {
+                    appearanceCard
+                    languageCard
+                }
+            }
+            .padding(32)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var personalityCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("PERSONALITY")
+                .font(Bocil.header(20))
+                .foregroundColor(Bocil.ink)
+
+            VStack(spacing: 8) {
+                ForEach(PersonalityMode.allCases, id: \.self) { mode in
+                    Button(action: { personality = mode }) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(mode.rawValue)
+                                .font(Bocil.header(16))
+                                .foregroundColor(Bocil.ink)
+                            Text(mode.subtitle)
+                                .font(Bocil.mono(14))
+                                .foregroundColor(personality == mode ? Bocil.ink : Bocil.subtext)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(personality == mode ? Bocil.accentSoft : Color.white)
+                        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.white)
+        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+    }
+
+    private var connectionCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("CONNECTION")
+                .font(Bocil.header(20))
+                .foregroundColor(Bocil.ink)
+
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Bocil-Desk-01")
+                        .font(Bocil.mono(14))
+                        .foregroundColor(Bocil.ink)
+                    Text("paired")
+                        .font(Bocil.mono(12))
+                        .foregroundColor(Bocil.subtext)
+                }
+                Spacer()
+                Circle().fill(Bocil.accentSoft).frame(width: 8, height: 8)
+            }
+
+            Rectangle().fill(Bocil.hairline).frame(height: 1)
+
+            Button(action: {}) {
+                Text("Forget this device")
+                    .font(Bocil.mono(12))
+                    .foregroundColor(Bocil.danger)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .overlay(Rectangle().stroke(Bocil.danger, lineWidth: 1.5))
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.white)
+        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+    }
+
+    private var notificationsCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("NOTIFICATIONS")
+                .font(Bocil.header(20))
+                .foregroundColor(Bocil.ink)
+
+            toggleRow(label: "Task reminders", isOn: $taskReminders)
+            Rectangle().fill(Bocil.hairline).frame(height: 1)
+            toggleRow(label: "Calendar alerts", isOn: $calendarAlerts)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Remind me before")
+                    .font(Bocil.mono(12))
+                    .foregroundColor(Bocil.subtext)
+
+                HStack(spacing: 8) {
+                    ForEach(remindOptions, id: \.self) { min in
+                        Button(action: { remindBefore = min }) {
+                            Text("\(min)m")
+                                .font(Bocil.mono(12))
+                                .foregroundColor(remindBefore == min ? Bocil.ink : Bocil.subtext)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(remindBefore == min ? Bocil.accentSoft : Color.white)
+                                .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.white)
+        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+    }
+
+    private var privacyCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("PRIVACY")
+                .font(Bocil.header(20))
+                .foregroundColor(Bocil.ink)
+
+            toggleRow(label: "Camera access",
+                      caption: "Used for presence and mood in focus mode",
+                      isOn: $cameraAccess)
+            Rectangle().fill(Bocil.hairline).frame(height: 1)
+            toggleRow(label: "Personalization data",
+                      caption: "Let's Bocil remember your profile and habits",
+                      isOn: $personalizationData)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.white)
+        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+    }
+
+    private var appearanceCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("APPEARANCE")
+                .font(Bocil.header(20))
+                .foregroundColor(Bocil.ink)
+
+            VStack(spacing: 8) {
+                ForEach(AppearanceMode.allCases, id: \.self) { mode in
+                    Button(action: { appearance = mode }) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(mode.rawValue)
+                                .font(Bocil.header(16))
+                                .foregroundColor(Bocil.ink)
+                            Text(mode.subtitle)
+                                .font(Bocil.mono(14))
+                                .foregroundColor(appearance == mode ? Bocil.ink : Bocil.subtext)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(appearance == mode ? Bocil.accentSoft : Color.white)
+                        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.white)
+        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+    }
+
+    private var languageCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("LANGUAGE")
+                .font(Bocil.header(20))
+                .foregroundColor(Bocil.ink)
+
+            VStack(spacing: 8) {
+                ForEach(LanguageMode.allCases, id: \.self) { mode in
+                    Button(action: { language = mode }) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(mode.rawValue)
+                                .font(Bocil.header(16))
+                                .foregroundColor(Bocil.ink)
+                            Text(mode.subtitle)
+                                .font(Bocil.mono(14))
+                                .foregroundColor(language == mode ? Bocil.ink : Bocil.subtext)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(language == mode ? Bocil.accentSoft : Color.white)
+                        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.white)
+        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+    }
+
+    @ViewBuilder
+    private func toggleRow(label: String, caption: String? = nil, isOn: Binding<Bool>) -> some View {
+        HStack(alignment: caption != nil ? .top : .center) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label)
+                    .font(Bocil.mono(16))
+                    .foregroundColor(Bocil.ink)
+                if let caption {
+                    Text(caption)
+                        .font(Bocil.mono(12))
+                        .foregroundColor(Bocil.subtext)
+                }
+            }
+            Spacer()
+            PixelToggle(isOn: isOn)
+        }
+    }
+}
+
+#Preview {
+    SettingsView()
+}
