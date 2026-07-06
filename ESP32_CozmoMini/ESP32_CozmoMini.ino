@@ -33,8 +33,8 @@
 #include <WiFi.h>
 
 /* -------- WIFI -------- */
-const char* WIFI_SSID     = "sayaMayunn";
-const char* WIFI_PASSWORD = "123456789";
+const char* WIFI_SSID     = "BocilServer";
+const char* WIFI_PASSWORD = "1234567890";
 const uint16_t TCP_PORT   = 4210;
 WiFiServer tcpServer(TCP_PORT);
 WiFiClient tcpClient;
@@ -224,15 +224,20 @@ void updateSerial() {
 }
 
 void updateTCP() {
-  // Accept a new client if none connected (or previous one disconnected)
-  if (!tcpClient || !tcpClient.connected()) {
-    WiFiClient newClient = tcpServer.available();
-    if (newClient) {
-      tcpClient = newClient;
-      tcpBuffer = "";
-      Serial.print("[WiFi] Client connected: ");
-      Serial.println(tcpClient.remoteIP());
+  // If a new client is waiting, take it immediately — don't rely on
+  // tcpClient.connected() to notice the old one died first. On the
+  // ESP32's LwIP stack, connected() can lag behind an actual peer RST,
+  // which left the accept backlog (size ~1) permanently occupied by a
+  // stale client and caused every new connection attempt to be reset.
+  if (tcpServer.hasClient()) {
+    if (tcpClient && tcpClient.connected()) {
+      Serial.println("[WiFi] New client waiting, dropping stale one");
+      tcpClient.stop();
     }
+    tcpClient = tcpServer.available();
+    tcpBuffer = "";
+    Serial.print("[WiFi] Client connected: ");
+    Serial.println(tcpClient.remoteIP());
   }
 
   if (tcpClient && tcpClient.connected()) {

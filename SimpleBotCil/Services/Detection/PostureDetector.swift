@@ -199,14 +199,6 @@ final class PostureDetector: ObservableObject {
         let instantStanding = standingSignals >= 2
 
         updateStateMachine(instantStanding: instantStanding)
-
-        print(String(format: "hipL=%.2f hipR=%.2f both=%@ shoulder=%@ face=%@ signals=%d -> %@",
-                     leftHipConf, rightHipConf,
-                     bothHipsVisible ? "Y" : "N",
-                     shoulderSignal ? "Y" : "N",
-                     faceSignal ? "Y" : "N",
-                     standingSignals,
-                     currentPosture?.rawValue ?? "nil"))
     }
 
     private func updateStateMachine(instantStanding: Bool) {

@@ -9,7 +9,7 @@ struct FocusView: View {
     @StateObject private var detector = EmotionDetector()
     @StateObject private var posture = PostureDetector()
     @StateObject private var phoneDetector = PhoneDetector()
-    @StateObject private var robotController: SerialRobotController
+    @StateObject private var robotController: AnyRobotController
 
     @State private var selectedMinutes: Int? = nil
     @State private var showCustom = false
@@ -21,6 +21,10 @@ struct FocusView: View {
 
     @State private var sessionActive = false
     @State private var elapsedSeconds = 0
+
+    @State private var lastSittingAlertAt: Date?
+    @State private var lastPhoneAlertAt: Date?
+    private let reAlertCooldown: TimeInterval = 30
 
     private var cameraActive: Bool {
         userAllowedCamera && camera.isAuthorized
@@ -43,9 +47,9 @@ struct FocusView: View {
     private let sittingLimit: TimeInterval = 15 * 60
     private let phoneLimit: TimeInterval = 10
 
-    init(serial: SerialManager) {
+    init(serial: SerialManager, connectionSettings: RobotConnectionSettings) {
         self.serial = serial
-        let robotController = SerialRobotController(serialManager: serial)
+        let robotController = AnyRobotController(serial: serial, settings: connectionSettings)
         _robotController = StateObject(wrappedValue: robotController)
     }
 
@@ -80,6 +84,36 @@ struct FocusView: View {
                 phoneDetector.process(pixelBuffer: pixelBuffer, face: detector.lastFaceObservation)
             }
         }
+        .onChange(of: posture.currentDuration) { _, _ in checkSittingThreshold() }
+        .onChange(of: phoneDetector.currentDuration) { _, _ in checkPhoneThreshold() }
+    }
+
+    // MARK: - Threshold alerts
+
+    private func checkSittingThreshold() {
+        guard posture.currentPosture == .sitting else { return }
+        guard posture.currentDuration >= sittingLimit else { return }
+        guard shouldAlert(lastSittingAlertAt) else { return }
+        lastSittingAlertAt = Date()
+        robotController.sendCommand("ANGRY")
+    }
+
+    private func checkPhoneThreshold() {
+        print("[FocusView] checkPhoneThreshold: isPhoneDetected=\(phoneDetector.isPhoneDetected) duration=\(phoneDetector.currentDuration) limit=\(phoneLimit) lastAlert=\(String(describing: lastPhoneAlertAt))")
+        guard phoneDetector.isPhoneDetected else { return }
+        guard phoneDetector.currentDuration >= phoneLimit else { return }
+        guard shouldAlert(lastPhoneAlertAt) else {
+            print("[FocusView] phone threshold crossed but still in cooldown")
+            return
+        }
+        lastPhoneAlertAt = Date()
+        print("[FocusView] Phone threshold crossed -> sending ANGRY")
+        robotController.sendCommand("ANGRY")
+    }
+
+    private func shouldAlert(_ last: Date?) -> Bool {
+        guard let last else { return true }
+        return Date().timeIntervalSince(last) >= reAlertCooldown
     }
 
     // MARK: - Left panel
@@ -304,6 +338,8 @@ struct FocusView: View {
                 guard canStart else { return }
                 sessionActive = true
                 elapsedSeconds = 0
+                lastSittingAlertAt = nil
+                lastPhoneAlertAt = nil
             }
             .font(Bocil.header(13))
             .foregroundColor(Bocil.ink)
@@ -440,5 +476,5 @@ private func formatDuration(_ seconds: TimeInterval) -> String {
 }
 
 #Preview {
-    FocusView(serial: SerialManager())
+    FocusView(serial: SerialManager(), connectionSettings: RobotConnectionSettings())
 }

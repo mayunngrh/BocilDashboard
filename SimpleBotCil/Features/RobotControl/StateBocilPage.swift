@@ -19,7 +19,7 @@ struct RobotState: Identifiable {
 
 struct StateBocilPage: View {
     @ObservedObject var serial: SerialManager
-    @StateObject private var robotController: SerialRobotController
+    @StateObject private var robotController: AnyRobotController
 
     /// Highlights the last state sent so the user gets feedback.
     @State private var activeCommand: String?
@@ -34,9 +34,9 @@ struct StateBocilPage: View {
         RobotState(emoji: "😐", label: "Idle",    command: "IDLE",    color: .gray),
     ]
 
-    init(serial: SerialManager) {
+    init(serial: SerialManager, connectionSettings: RobotConnectionSettings) {
         self.serial = serial
-        _robotController = StateObject(wrappedValue: SerialRobotController(serialManager: serial))
+        _robotController = StateObject(wrappedValue: AnyRobotController(serial: serial, settings: connectionSettings))
     }
 
     private var isConnected: Bool {
@@ -117,5 +117,5 @@ struct StateBocilPage: View {
 }
 
 #Preview {
-    StateBocilPage(serial: SerialManager())
+    StateBocilPage(serial: SerialManager(), connectionSettings: RobotConnectionSettings())
 }

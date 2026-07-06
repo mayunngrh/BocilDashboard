@@ -58,3 +58,6 @@ ESP32_RoboEyes_Sketch/build/
 .vscode/
 *.swp
 *~
+
+# Google OAuth client (sensitive credentials)
+SimpleBotCil/Resources/google_oauth_client.json

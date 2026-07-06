@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AppView: View {
     @ObservedObject var serial: SerialManager
+    @StateObject private var connectionSettings = RobotConnectionSettings()
     @State private var selectedTab: BocilTab = .focus
 
     var body: some View {
@@ -29,9 +30,9 @@ struct AppView: View {
         switch selectedTab {
         case .home:     ComingSoonView(label: "HOME")
         case .calendar: CalendarView()
-        case .focus:    FocusView(serial: serial)
+        case .focus:    FocusView(serial: serial, connectionSettings: connectionSettings)
         case .history:  HistoryView()
-        case .settings: SettingsView()
+        case .settings: SettingsView(connectionSettings: connectionSettings)
         }
     }
 }

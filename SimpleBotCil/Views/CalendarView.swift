@@ -24,6 +24,7 @@ private let weekLabels = ["M", "T", "W", "T", "F", "S", "S"]
 // MARK: - CalendarView
 
 struct CalendarView: View {
+    @EnvironmentObject var googleService: GoogleCalendarService
     @State private var displayedMonth = Date()
     @State private var selectedDate   = Date()
     @State private var showAddEvent   = false
@@ -44,6 +45,16 @@ struct CalendarView: View {
             .sorted { $0.hour * 60 + $0.minute < $1.hour * 60 + $1.minute }
     }
 
+    private var googleEventsForSelectedDate: [GoogleCalendarEvent] {
+        let cal = Calendar.current
+        return googleService.events
+            .filter { event in
+                guard let date = event.startDate else { return false }
+                return cal.isDate(date, inSameDayAs: selectedDate)
+            }
+            .sorted { ($0.startDate ?? .distantPast) < ($1.startDate ?? .distantPast) }
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 24) {
             leftColumn
@@ -58,6 +69,11 @@ struct CalendarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay {
             if showAddEvent { addEventOverlay }
+        }
+        .task {
+            if googleService.oauth.isAuthenticated {
+                await googleService.refreshData()
+            }
         }
     }
 
@@ -128,17 +144,36 @@ struct CalendarView: View {
 
             // Sync status card
             VStack(alignment: .leading, spacing: 10) {
-                Text("SYNC STATUS")
-                    .font(Bocil.header(11))
-                    .foregroundColor(Bocil.ink)
+                HStack {
+                    Text("SYNC STATUS")
+                        .font(Bocil.header(11))
+                        .foregroundColor(Bocil.ink)
+                    Spacer()
+                    if googleService.isLoading || googleService.oauth.isAuthenticating {
+                        ProgressView().scaleEffect(0.6)
+                    } else if googleService.oauth.isAuthenticated {
+                        Circle().fill(Color.green).frame(width: 7, height: 7)
+                    }
+                }
 
-                Text("Connect and sync your events so Bocil can nudge you before meetings and read out today's agenda")
-                    .font(Bocil.mono(11))
-                    .foregroundColor(Bocil.subtext)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let error = googleService.error {
+                    Text(error)
+                        .font(Bocil.mono(10))
+                        .foregroundColor(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if googleService.oauth.isAuthenticated {
+                    Text("\(googleService.events.count) events · \(googleService.tasks.count) tasks synced")
+                        .font(Bocil.mono(11))
+                        .foregroundColor(Bocil.subtext)
+                } else {
+                    Text("Connect and sync your events so Bocil can nudge you before meetings and read out today's agenda")
+                        .font(Bocil.mono(11))
+                        .foregroundColor(Bocil.subtext)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 Button(action: connectGoogle) {
-                    Text("Connect google calendar")
+                    Text(googleService.oauth.isAuthenticated ? "Refresh" : "Connect google calendar")
                         .font(Bocil.mono(11))
                         .foregroundColor(Bocil.ink)
                         .padding(.horizontal, 10)
@@ -161,6 +196,7 @@ struct CalendarView: View {
         let isSelected = day.date.map { cal.isDate($0, inSameDayAs: selectedDate) } ?? false
         let hasDot     = day.date.map { d in
             events.contains { cal.isDate($0.date, inSameDayAs: d) }
+                || googleService.events.contains { ($0.startDate).map { cal.isDate($0, inSameDayAs: d) } ?? false }
         } ?? false
 
         Button(action: { if let d = day.date { selectedDate = d } }) {
@@ -208,7 +244,7 @@ struct CalendarView: View {
 
                 Rectangle().fill(Bocil.hairline).frame(height: 1)
 
-                if selectedDateEvents.isEmpty {
+                if selectedDateEvents.isEmpty && googleEventsForSelectedDate.isEmpty {
                     VStack {
                         Spacer()
                         Text("No events for this day")
@@ -220,6 +256,9 @@ struct CalendarView: View {
                     .frame(minHeight: 160)
                 } else {
                     VStack(spacing: 8) {
+                        ForEach(googleEventsForSelectedDate) { event in
+                            googleEventRow(event)
+                        }
                         ForEach(selectedDateEvents) { event in
                             eventRow(event)
                         }
@@ -279,6 +318,41 @@ struct CalendarView: View {
                         .font(Bocil.mono(11))
                         .foregroundColor(Bocil.faint)
                 }
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.white)
+        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+    }
+
+    @ViewBuilder
+    private func googleEventRow(_ event: GoogleCalendarEvent) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(event.displayTime)
+                    .font(Bocil.mono(12))
+                    .foregroundColor(Bocil.ink)
+            }
+            .frame(width: 40)
+
+            Rectangle()
+                .fill(Bocil.accent)
+                .frame(width: 3)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event.displayTitle)
+                    .font(Bocil.mono(13))
+                    .foregroundColor(Bocil.ink)
+                if let location = event.location, !location.isEmpty {
+                    Text(location)
+                        .font(Bocil.mono(11))
+                        .foregroundColor(Bocil.subtext)
+                }
+                Text("Google Calendar")
+                    .font(Bocil.mono(10))
+                    .foregroundColor(Bocil.faint)
             }
             Spacer()
         }
@@ -404,7 +478,13 @@ struct CalendarView: View {
     }
 
     private func connectGoogle() {
-        if let url = URL(string: "https://calendar.google.com") { NSWorkspace.shared.open(url) }
+        Task {
+            if googleService.oauth.isAuthenticated {
+                await googleService.refreshData()
+            } else {
+                await googleService.connect()
+            }
+        }
     }
 
     private func openGoogleCalendar() {
@@ -413,5 +493,7 @@ struct CalendarView: View {
 }
 
 #Preview {
-    CalendarView().frame(width: 1000, height: 700)
+    CalendarView()
+        .environmentObject(GoogleCalendarService(oauth: try! GoogleOAuthManager(clientJSONPath: Bundle.main.path(forResource: "google_oauth_client", ofType: "json") ?? "")))
+        .frame(width: 1000, height: 700)
 }
