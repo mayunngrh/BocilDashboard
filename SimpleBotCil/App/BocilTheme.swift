@@ -1,28 +1,38 @@
 import SwiftUI
+import AppKit
 
 // MARK: - Theme
 
 enum Bocil {
-    private static func c(_ hex: String) -> Color {
-        let s = hex.trimmingCharacters(in: .alphanumerics.inverted)
+    private static func nsColor(_ s: String) -> NSColor {
         var v: UInt64 = 0
-        Scanner(string: s).scanHexInt64(&v)
-        return Color(
-            red:   Double((v >> 16) & 0xFF) / 255,
-            green: Double((v >> 8)  & 0xFF) / 255,
-            blue:  Double(v         & 0xFF) / 255
+        Scanner(string: s.trimmingCharacters(in: .alphanumerics.inverted)).scanHexInt64(&v)
+        return NSColor(
+            red:   CGFloat((v >> 16) & 0xFF) / 255,
+            green: CGFloat((v >> 8)  & 0xFF) / 255,
+            blue:  CGFloat(v         & 0xFF) / 255,
+            alpha: 1
         )
     }
 
-    static let bg         = c("EAF9FF")  // Background
-    static let cardBorder = c("9FD8F5")  // Border
-    static let hairline   = c("D8ECFA")  // Dividers/separators
-    static let accent     = c("102942")  // Strong emphasis (maps to Primary Text)
-    static let accentSoft = c("78D8F8")  // Primary interactive
-    static let ink        = c("102942")  // Primary Text
-    static let subtext    = c("5B7A94")  // Secondary Text
-    static let faint      = c("8BA4BB")  // Tertiary Text
-    static let danger     = c("A13D2C")  // Danger
+    private static func adaptive(light: String, dark: String) -> Color {
+        Color(NSColor(name: nil, dynamicProvider: { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                ? nsColor(dark) : nsColor(light)
+        }))
+    }
+
+    static let bg         = adaptive(light: "EAF9FF", dark: "0D141E")
+    static let surface    = adaptive(light: "FFFFFF", dark: "151E2B")
+    static let cardBorder = adaptive(light: "9FD8F5", dark: "2B3D4F")
+    static let hairline   = adaptive(light: "D8ECFA", dark: "1E2D3D")
+    static let accent     = adaptive(light: "102942", dark: "F2F7FC")
+    static let accentSoft = adaptive(light: "78D8F8", dark: "78D8F8")
+    static let onAccent   = Color(red: 16/255, green: 41/255, blue: 66/255) // always #102942 on accentSoft bg
+    static let ink        = adaptive(light: "102942", dark: "F2F7FC")
+    static let subtext    = adaptive(light: "5B7A94", dark: "A5B7C9")
+    static let faint      = adaptive(light: "8BA4BB", dark: "65768A")
+    static let danger     = adaptive(light: "A13D2C", dark: "C55343")
 
     static func header(_ size: CGFloat) -> Font { .custom("Silkscreen", size: size) }
     static func mono(_ size: CGFloat) -> Font   { .custom("SpaceMono-Regular", size: size) }
@@ -62,7 +72,7 @@ struct TopNavBar: View {
                             .font(Bocil.header(14))
                             .tracking(0.5)
                             .fixedSize()
-                            .foregroundColor(selected == tab ? Bocil.ink : Bocil.subtext)
+                            .foregroundColor(selected == tab ? Bocil.onAccent : Bocil.subtext)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
                             .background(selected == tab ? Bocil.accentSoft : Color.clear)
@@ -99,7 +109,7 @@ struct TopNavBar: View {
             .padding(.trailing, 20)
         }
         .frame(height: 64)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().fill(Bocil.hairline).frame(height: 1), alignment: .bottom)
     }
 }

@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @EnvironmentObject private var appearanceManager: AppearanceManager
     @State private var personality: PersonalityMode = .calm
-    @State private var appearance: AppearanceMode   = .system
     @State private var language: LanguageMode       = .english
     @State private var taskReminders      = true
     @State private var calendarAlerts     = true
@@ -53,7 +53,7 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
-                        .background(personality == mode ? Bocil.accentSoft : Color.white)
+                        .background(personality == mode ? Bocil.accentSoft : Bocil.surface)
                         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
                     }
                     .buttonStyle(.plain)
@@ -62,7 +62,7 @@ struct SettingsView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
 
@@ -100,7 +100,7 @@ struct SettingsView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
 
@@ -127,7 +127,7 @@ struct SettingsView: View {
                                 .foregroundColor(remindBefore == min ? Bocil.ink : Bocil.subtext)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(remindBefore == min ? Bocil.accentSoft : Color.white)
+                                .background(remindBefore == min ? Bocil.accentSoft : Bocil.surface)
                                 .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
                         }
                         .buttonStyle(.plain)
@@ -137,7 +137,7 @@ struct SettingsView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
 
@@ -157,7 +157,7 @@ struct SettingsView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
 
@@ -169,19 +169,19 @@ struct SettingsView: View {
 
             VStack(spacing: 8) {
                 ForEach(AppearanceMode.allCases, id: \.self) { mode in
-                    Button(action: { appearance = mode }) {
+                    Button(action: { appearanceManager.mode = mode }) {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(mode.rawValue)
                                 .font(Bocil.header(16))
                                 .foregroundColor(Bocil.ink)
                             Text(mode.subtitle)
                                 .font(Bocil.mono(14))
-                                .foregroundColor(appearance == mode ? Bocil.ink : Bocil.subtext)
+                                .foregroundColor(appearanceManager.mode == mode ? Bocil.ink : Bocil.subtext)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
-                        .background(appearance == mode ? Bocil.accentSoft : Color.white)
+                        .background(appearanceManager.mode == mode ? Bocil.accentSoft : Bocil.surface)
                         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
                     }
                     .buttonStyle(.plain)
@@ -190,7 +190,7 @@ struct SettingsView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
 
@@ -214,7 +214,7 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
-                        .background(language == mode ? Bocil.accentSoft : Color.white)
+                        .background(language == mode ? Bocil.accentSoft : Bocil.surface)
                         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
                     }
                     .buttonStyle(.plain)
@@ -223,7 +223,7 @@ struct SettingsView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
 
@@ -248,4 +248,5 @@ struct SettingsView: View {
 
 #Preview {
     SettingsView()
+        .environmentObject(AppearanceManager())
 }

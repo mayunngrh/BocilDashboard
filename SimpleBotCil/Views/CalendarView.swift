@@ -19,8 +19,6 @@ private func daysInGrid(for month: Date) -> [CalendarDay] {
     return days
 }
 
-//manyun
-
 private let weekLabels = ["M", "T", "W", "T", "F", "S", "S"]
 
 // MARK: - CalendarView
@@ -125,7 +123,7 @@ struct CalendarView: View {
                 }
             }
             .padding(12)
-            .background(Color.white)
+            .background(Bocil.surface)
             .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
 
             // Sync status card
@@ -151,7 +149,7 @@ struct CalendarView: View {
                 .buttonStyle(.plain)
             }
             .padding(12)
-            .background(Color.white)
+            .background(Bocil.surface)
             .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
         }
     }
@@ -169,14 +167,14 @@ struct CalendarView: View {
             VStack(spacing: 2) {
                 Text("\(day.day)")
                     .font(Bocil.mono(10))
-                    .foregroundColor(isToday ? .white : Bocil.ink)
+                    .foregroundColor(isToday ? Bocil.surface : Bocil.ink)
                     .frame(width: 22, height: 22)
                     .background(
                         isToday    ? Bocil.ink        :
                         isSelected ? Bocil.accentSoft : Color.clear
                     )
                 Circle()
-                    .fill(hasDot ? (isToday ? Color.white.opacity(0.9) : Bocil.subtext) : Color.clear)
+                    .fill(hasDot ? (isToday ? Bocil.surface.opacity(0.9) : Bocil.subtext) : Color.clear)
                     .frame(width: 4, height: 4)
             }
         }
@@ -230,7 +228,7 @@ struct CalendarView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .background(Color.white)
+            .background(Bocil.surface)
             .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
 
             Button(action: openGoogleCalendar) {
@@ -286,7 +284,7 @@ struct CalendarView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
 
@@ -352,7 +350,7 @@ struct CalendarView: View {
             }
             .padding(24)
             .frame(width: 360)
-            .background(Color.white)
+            .background(Bocil.surface)
             .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
         }
     }

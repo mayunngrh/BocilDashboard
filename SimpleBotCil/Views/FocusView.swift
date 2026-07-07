@@ -4,6 +4,7 @@ import Combine
 
 struct FocusView: View {
     @ObservedObject var serial: SerialManager
+    @EnvironmentObject var focusStore: FocusStore
 
     @StateObject private var camera = CameraManager()
     @StateObject private var detector = EmotionDetector()
@@ -18,9 +19,6 @@ struct FocusView: View {
 
     @State private var showInfo = false
     @State private var userAllowedCamera = false
-
-    @State private var sessionActive = false
-    @State private var elapsedSeconds = 0
 
     private var cameraActive: Bool {
         userAllowedCamera && camera.isAuthorized
@@ -37,7 +35,7 @@ struct FocusView: View {
     }
 
     private var elapsedFormatted: String {
-        String(format: "%02d:%02d", elapsedSeconds / 60, elapsedSeconds % 60)
+        String(format: "%02d:%02d", focusStore.currentSeconds / 60, focusStore.currentSeconds % 60)
     }
 
     private let sittingLimit: TimeInterval = 15 * 60
@@ -66,12 +64,7 @@ struct FocusView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onDisappear { camera.stop() }
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
-            guard sessionActive else { return }
-            elapsedSeconds += 1
-            if let mins = effectiveMinutes, elapsedSeconds >= mins * 60 {
-                sessionActive = false
-                elapsedSeconds = 0
-            }
+            focusStore.tick(effectiveMinutes: effectiveMinutes)
         }
         .onAppear {
             camera.onFrame = { pixelBuffer in
@@ -79,6 +72,15 @@ struct FocusView: View {
                 posture.process(pixelBuffer: pixelBuffer)
                 phoneDetector.process(pixelBuffer: pixelBuffer, face: detector.lastFaceObservation)
             }
+        }
+        .onChange(of: focusStore.pendingAutoStart) {
+            guard focusStore.pendingAutoStart else { return }
+            focusStore.pendingAutoStart = false
+            noTimeSelected = true
+            selectedMinutes = nil
+            showCustom = false
+            customInput = ""
+            focusStore.start()
         }
     }
 
@@ -110,13 +112,13 @@ struct FocusView: View {
                             HStack(spacing: 12) {
                                 Text("Custom time")
                                     .font(Bocil.mono(14))
-                                    .foregroundColor(Bocil.ink)
+                                    .foregroundColor(showCustom ? Bocil.onAccent : Bocil.ink)
                                 Spacer()
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 12)
                             .frame(maxWidth: .infinity)
-                            .background(showCustom ? Bocil.accentSoft : Color.white)
+                            .background(showCustom ? Bocil.accentSoft : Bocil.surface)
                             .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
                         }
                         .buttonStyle(.plain)
@@ -151,13 +153,13 @@ struct FocusView: View {
                         HStack(spacing: 12) {
                             Text("No time")
                                 .font(Bocil.mono(14))
-                                .foregroundColor(Bocil.ink)
+                                .foregroundColor(noTimeSelected ? Bocil.onAccent : Bocil.ink)
                             Spacer()
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 12)
                         .frame(maxWidth: .infinity)
-                        .background(noTimeSelected ? Bocil.accentSoft : Color.white)
+                        .background(noTimeSelected ? Bocil.accentSoft : Bocil.surface)
                         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
                     }
                     .buttonStyle(.plain)
@@ -179,13 +181,13 @@ struct FocusView: View {
             HStack(spacing: 12) {
                 Text("\(minutes) Minutes")
                     .font(Bocil.mono(14))
-                    .foregroundColor(Bocil.ink)
+                    .foregroundColor(selectedMinutes == minutes && !showCustom && !noTimeSelected ? Bocil.onAccent : Bocil.ink)
                 Spacer()
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
-            .background(selectedMinutes == minutes && !showCustom && !noTimeSelected ? Bocil.accentSoft : Color.white)
+            .background(selectedMinutes == minutes && !showCustom && !noTimeSelected ? Bocil.accentSoft : Bocil.surface)
             .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
         }
         .buttonStyle(.plain)
@@ -238,7 +240,7 @@ struct FocusView: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Color.white)
+                    .background(Bocil.surface)
                     .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
 
                     // Phone card
@@ -256,7 +258,7 @@ struct FocusView: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Color.white)
+                    .background(Bocil.surface)
                     .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
                 }
             }
@@ -265,10 +267,10 @@ struct FocusView: View {
             if cameraActive {
                 HStack(alignment: .center, spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(sessionActive ? "DEEP WORK ACTIVE" : "DEEP WORK")
+                        Text(focusStore.sessionActive ? "DEEP WORK ACTIVE" : "DEEP WORK")
                             .font(Bocil.header(20))
                             .foregroundColor(Bocil.ink)
-                        Text(sessionActive
+                        Text(focusStore.sessionActive
                              ? "\(elapsedFormatted) elapsed"
                              : "Mute nudges and let Bocil watch quietly")
                             .font(Bocil.mono(14))
@@ -280,7 +282,7 @@ struct FocusView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 18)
                 .frame(maxWidth: .infinity)
-                .background(Color.white)
+                .background(Bocil.surface)
                 .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
             }
         }
@@ -288,10 +290,9 @@ struct FocusView: View {
 
     @ViewBuilder
     private var sessionActionButton: some View {
-        if sessionActive {
+        if focusStore.sessionActive {
             Button("END SESSION") {
-                sessionActive = false
-                elapsedSeconds = 0
+                focusStore.stop()
             }
             .font(Bocil.header(13))
             .foregroundColor(Bocil.ink)
@@ -302,8 +303,7 @@ struct FocusView: View {
         } else {
             Button("START") {
                 guard canStart else { return }
-                sessionActive = true
-                elapsedSeconds = 0
+                focusStore.start()
             }
             .font(Bocil.header(13))
             .foregroundColor(Bocil.ink)
@@ -319,7 +319,7 @@ struct FocusView: View {
     private var infoButton: some View {
         Button(action: { showInfo.toggle() }) {
             ZStack {
-                Rectangle().fill(Color.white)
+                Rectangle().fill(Bocil.surface)
                 Text("i")
                     .font(Bocil.mono(13))
                     .foregroundColor(Bocil.subtext)
@@ -391,7 +391,7 @@ struct FocusView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
 
@@ -423,7 +423,7 @@ struct FocusView: View {
             }
         }
         .padding(20)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.accentSoft, lineWidth: 2))
         .frame(width: 300)
     }
@@ -441,4 +441,5 @@ private func formatDuration(_ seconds: TimeInterval) -> String {
 
 #Preview {
     FocusView(serial: SerialManager())
+        .environmentObject(FocusStore())
 }

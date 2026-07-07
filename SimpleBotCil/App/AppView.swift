@@ -2,7 +2,10 @@ import SwiftUI
 
 struct AppView: View {
     @ObservedObject var serial: SerialManager
-    @State private var selectedTab: BocilTab = .focus
+    @EnvironmentObject var appearance:    AppearanceManager
+    @EnvironmentObject var focusStore:    FocusStore
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var selectedTab: BocilTab = .home
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,17 +20,26 @@ struct AppView: View {
                 Image("dot-pattern")
                     .resizable()
                     .scaledToFill()
-                    .blendMode(.multiply)
-                    .opacity(0.08)
+                    .blendMode(colorScheme == .dark ? .screen : .multiply)
+                    .opacity(colorScheme == .dark ? 0.05 : 0.08)
             }
             .ignoresSafeArea()
         )
+        .preferredColorScheme(appearance.colorScheme)
     }
 
     @ViewBuilder
     private var tabContent: some View {
         switch selectedTab {
-        case .home:     ComingSoonView(label: "HOME")
+        case .home:
+            HomeView(
+                onOpenCalendar: { selectedTab = .calendar },
+                onOpenFocus:    { selectedTab = .focus    },
+                onStartFocus:   {
+                    focusStore.pendingAutoStart = true
+                    selectedTab = .focus
+                }
+            )
         case .calendar: CalendarView()
         case .focus:    FocusView(serial: serial)
         case .history:  HistoryView()
@@ -54,4 +66,7 @@ struct ComingSoonView: View {
 
 #Preview {
     AppView(serial: SerialManager())
+        .environmentObject(AppearanceManager())
+        .environmentObject(CalendarStore())
+        .environmentObject(FocusStore())
 }
