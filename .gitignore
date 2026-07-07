@@ -58,3 +58,11 @@ ESP32_RoboEyes_Sketch/build/
 .vscode/
 *.swp
 *~
+
+# Secrets / credentials
+**/google_oauth_client.json
+*.p12
+*.pem
+*.mobileprovision
+.env
+.env.*
