@@ -40,10 +40,29 @@ struct CalendarEvent: Identifiable {
 struct NewEventDraft {
     var title: String = ""
     var location: String = ""
-    var hourStr: String = "9"
-    var minuteStr: String = "00"
-    var duration: String = "30m"
+    var startHourStr: String = "9"
+    var startMinStr: String = "00"
+    var endHourStr: String = "10"
+    var endMinStr: String = "00"
+    var isImportant: Bool = false
 
-    var hour: Int { Int(hourStr) ?? 9 }
-    var minute: Int { Int(minuteStr) ?? 0 }
+    var startDate: Date {
+        let cal = Calendar.current
+        let now = Date()
+        var comps = cal.dateComponents([.year, .month, .day], from: now)
+        comps.hour = Int(startHourStr) ?? 9
+        comps.minute = Int(startMinStr) ?? 0
+        comps.second = 0
+        return cal.date(from: comps) ?? now
+    }
+
+    var endDate: Date {
+        let cal = Calendar.current
+        let now = Date()
+        var comps = cal.dateComponents([.year, .month, .day], from: now)
+        comps.hour = Int(endHourStr) ?? 10
+        comps.minute = Int(endMinStr) ?? 0
+        comps.second = 0
+        return cal.date(from: comps) ?? now
+    }
 }
