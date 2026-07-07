@@ -1,155 +1,237 @@
 import SwiftUI
 
 struct HistoryView: View {
-    @State private var items: [AudioHistoryItem] = [
-        AudioHistoryItem(title: "Morning check-in",      date: "Jul 3, 2026", time: "08:12 AM", duration: "0:42",
-                         bars: [8,14,20,12,22,10,16,24,9,18,13,20,8,15,22,11,17,9]),
-        AudioHistoryItem(title: "Focus session wrap-up", date: "Jul 2, 2026", time: "05:47 PM", duration: "1:15",
-                         bars: [12,18,9,24,14,20,8,16,22,10,19,13,21,9,15,24,11,17]),
-        AudioHistoryItem(title: "Untitled chat",         date: "Jul 1, 2026", time: "11:03 AM", duration: "0:28",
-                         bars: [6,10,8,14,9,12,7,15,10,8,13,9,11,7,14,8,10,6]),
-        AudioHistoryItem(title: "Weekend planning",      date: "Jun 29, 2026", time: "09:20 AM", duration: "2:03",
-                         bars: [16,22,18,24,20,14,22,18,24,16,20,14,22,18,24,16,20,14]),
-    ]
+    @StateObject private var vm = HistoryViewModel()
 
-    @State private var filter: HistoryFilter = .allTime
+    @State private var selectedConversation: Conversation? = nil
+
+    // Filter dropdown state
     @State private var filterOpen = false
-    @State private var editMode   = false
-    @State private var playingID: UUID? = nil
+    @State private var showCalendar = false
 
-    private var dateOptions: [String] {
-        Array(NSOrderedSet(array: items.map { $0.date })) as! [String]
-    }
-    private var visibleItems: [AudioHistoryItem] {
-        switch filter {
-        case .allTime:    return items
-        case .day(let d): return items.filter { $0.date == d }
-        }
-    }
-    private var filterLabel: String {
-        switch filter {
-        case .allTime:    return "All time"
-        case .day(let d): return d
-        }
-    }
+    // Per-row title editing state
+    @State private var editingID: UUID? = nil
+    @State private var draftTitle = ""
+    @FocusState private var titleFieldFocused: Bool
 
     var body: some View {
+        Group {
+            if let conversation = selectedConversation {
+                ConversationDetailView(conversation: conversation) {
+                    selectedConversation = nil
+                }
+            } else {
+                listView
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task { await vm.load() }
+    }
+
+    // MARK: - History list
+
+    private var listView: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                HStack {
-                    Text("CHAT HISTORY")
-                        .font(Bocil.header(32))
-                        .foregroundColor(Bocil.ink)
+                header
+                    .zIndex(1)
 
-                    Spacer()
-
-                    HStack(spacing: 8) {
-                        Button(action: { filterOpen.toggle() }) {
-                            Text("Filter: \(filterLabel) ▾")
-                                .font(Bocil.mono(14))
-                                .foregroundColor(Bocil.accent)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 9)
-                                .background(Bocil.surface)
-                                .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
-                        }
-                        .buttonStyle(.plain)
-                        .overlay(alignment: .topTrailing) {
-                            if filterOpen {
-                                VStack(alignment: .leading, spacing: 0) {
-                                    filterRow(label: "All time", isSelected: filter == .allTime) {
-                                        filter = .allTime; filterOpen = false
-                                    }
-                                    ForEach(dateOptions, id: \.self) { d in
-                                        filterRow(label: d, isSelected: filter == .day(d)) {
-                                            filter = .day(d); filterOpen = false
-                                        }
-                                    }
-                                }
-                                .fixedSize(horizontal: true, vertical: false)
-                                .background(Bocil.surface)
-                                .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
-                                .offset(y: 38)
-                            }
-                        }
-
-                        Button(action: { editMode.toggle() }) {
-                            Text(editMode ? "Done" : "Edit")
-                                .font(Bocil.mono(14))
-                                .foregroundColor(editMode ? Bocil.ink : Bocil.subtext)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 9)
-                                .background(editMode ? Bocil.accentSoft : Bocil.surface)
-                                .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .zIndex(1)
-
-                VStack(spacing: 12) {
-                    ForEach(visibleItems) { item in
-                        historyRow(item)
-                    }
+                switch vm.filter {
+                case .thisWeek: weekContent
+                case .day(let date): dayContent(date)
                 }
             }
             .padding(.horizontal, 32)
-            .padding(.bottom, 32)
-            .padding(.top, 32)
+            .padding(.vertical, 32)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var header: some View {
+        HStack {
+            Text("CHAT HISTORY")
+                .font(Bocil.header(32))
+                .foregroundColor(Bocil.ink)
+
+            Spacer()
+
+            filterButton
+        }
+    }
+
+    // MARK: - Filter button + dropdown
+
+    private var filterLabel: String {
+        switch vm.filter {
+        case .thisWeek: return "This week"
+        case .day(let d): return Self.shortDate(d)
+        }
+    }
+
+    private var filterButton: some View {
+        Button(action: {
+            showCalendar = false
+            filterOpen.toggle()
+        }) {
+            Text("Filter: \(filterLabel) ▾")
+                .font(Bocil.mono(14))
+                .foregroundColor(Bocil.accent)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(Color.white)
+                .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
+        }
+        .buttonStyle(.plain)
+        // Popover lives in its own window, so calendar taps are never swallowed
+        // by the list underneath (which an inline overlay suffered from).
+        .popover(isPresented: $filterOpen, arrowEdge: .bottom) {
+            dropdownContent
+                .background(Color.white)
+        }
     }
 
     @ViewBuilder
-    private func historyRow(_ item: AudioHistoryItem) -> some View {
-        HStack(spacing: 16) {
-            Button(action: { playingID = (playingID == item.id) ? nil : item.id }) {
-                Text(playingID == item.id ? "❚❚" : "▶")
-                    .font(.system(size: 12))
-                    .foregroundColor(Bocil.accent)
-                    .frame(width: 36, height: 36)
-                    .background(Bocil.bg)
-                    .overlay(Rectangle().stroke(Bocil.accentSoft, lineWidth: 2))
+    private var dropdownContent: some View {
+        if showCalendar {
+            // Mini calendar styled after the Calendar page; picking a day applies
+            // the filter and closes the dropdown.
+            MiniCalendarView(selectedDate: pickedDate) { date in
+                vm.filter = .day(date)
+                closeDropdown()
             }
-            .buttonStyle(.plain)
-
-            HStack(alignment: .bottom, spacing: 2) {
-                ForEach(Array(item.bars.enumerated()), id: \.offset) { _, h in
-                    Rectangle().fill(Bocil.cardBorder).frame(width: 3, height: h)
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                dropdownRow(label: "This week", isSelected: vm.filter == .thisWeek) {
+                    vm.filter = .thisWeek
+                    closeDropdown()
+                }
+                dropdownRow(label: "Pick date", isSelected: pickedDate != nil) {
+                    showCalendar = true
                 }
             }
-            .frame(height: 26, alignment: .bottom)
+            .frame(width: 160)
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 4) {
-                if editMode {
-                    TextField("Title", text: Binding(
-                        get: { item.title },
-                        set: { newVal in
-                            if let idx = items.firstIndex(where: { $0.id == item.id }) {
-                                items[idx].title = newVal
+    @ViewBuilder
+    private func dropdownRow(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(Bocil.mono(14))
+                .foregroundColor(Bocil.ink)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(isSelected ? Bocil.bg : Color.white)
+        }
+        .buttonStyle(.plain)
+        .overlay(Rectangle().fill(Bocil.bg).frame(height: 1), alignment: .bottom)
+    }
+
+    private var pickedDate: Date? {
+        if case .day(let d) = vm.filter { return d }
+        return nil
+    }
+
+    private func closeDropdown() {
+        filterOpen = false
+        showCalendar = false
+    }
+
+    // MARK: - "This week" grouped content
+
+    @ViewBuilder
+    private var weekContent: some View {
+        let sections = vm.weekSections
+        if sections.isEmpty {
+            emptyState("No conversations this week")
+        } else {
+            VStack(alignment: .leading, spacing: 20) {
+                ForEach(sections) { section in
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(section.title)
+                            .font(Bocil.header(16))
+                            .foregroundColor(Bocil.subtext)
+
+                        VStack(spacing: 12) {
+                            ForEach(section.conversations) { conversation in
+                                conversationRow(conversation)
                             }
                         }
-                    ))
-                    .textFieldStyle(.plain)
-                    .font(Bocil.mono(16))
-                    .foregroundColor(Bocil.ink)
-                    .padding(4)
-                    .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1))
-                } else {
-                    Text(item.title)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - "Pick date" content
+
+    @ViewBuilder
+    private func dayContent(_ date: Date) -> some View {
+        let items = vm.conversations(on: date)
+        if items.isEmpty {
+            emptyState("No conversations on \(Self.longDate(date))")
+        } else {
+            VStack(spacing: 12) {
+                ForEach(items) { conversation in
+                    conversationRow(conversation)
+                }
+            }
+        }
+    }
+
+    // MARK: - Conversation card
+    // The card itself is a tap target (opens the chat detail); the play and
+    // pencil controls are separate buttons layered on top. Keeping the card
+    // out of a `Button` wrapper lets the inline TextField receive focus.
+
+    @ViewBuilder
+    private func conversationRow(_ conversation: Conversation) -> some View {
+        let isEditing = editingID == conversation.id
+
+        HStack(spacing: 16) {
+            Text("▶")
+                .font(.system(size: 12))
+                .foregroundColor(Bocil.accent)
+                .frame(width: 36, height: 36)
+                .background(Bocil.bg)
+                .overlay(Rectangle().stroke(Bocil.accentSoft, lineWidth: 2))
+
+            WaveformView(bars: WaveformView.mockBars(seed: conversation.id.hashValue))
+
+            VStack(alignment: .leading, spacing: 4) {
+                if isEditing {
+                    TextField(conversation.displayTitle, text: $draftTitle)
+                        .textFieldStyle(.plain)
                         .font(Bocil.mono(16))
                         .foregroundColor(Bocil.ink)
+                        .focused($titleFieldFocused)
+                        .onSubmit { commitEdit(conversation) }
+                        .padding(4)
+                        .overlay(Rectangle().stroke(Bocil.accentSoft, lineWidth: 1.5))
+                } else {
+                    Text(conversation.displayTitle)
+                        .font(Bocil.mono(16))
+                        .foregroundColor(conversation.title == nil ? Bocil.subtext : Bocil.ink)
                 }
-                Text("\(item.date) · \(item.time)")
+                Text("\(conversation.startTimeLabel) · \(conversation.messages.count) voice messages")
                     .font(Bocil.mono(12))
                     .foregroundColor(Bocil.faint)
             }
 
             Spacer()
 
-            if editMode {
+            if isEditing {
+                Button("Save") { commitEdit(conversation) }
+                    .font(Bocil.mono(12))
+                    .foregroundColor(Bocil.ink)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Bocil.accentSoft)
+                    .buttonStyle(.plain)
+
                 Button("Delete") {
-                    items.removeAll { $0.id == item.id }
+                    vm.delete(conversation)
+                    editingID = nil
                 }
                 .font(Bocil.mono(12))
                 .foregroundColor(Bocil.danger)
@@ -158,7 +240,18 @@ struct HistoryView: View {
                 .overlay(Rectangle().stroke(Bocil.danger, lineWidth: 1.5))
                 .buttonStyle(.plain)
             } else {
-                Text(item.duration)
+                // Small pencil: puts just this card into title-edit mode.
+                Button(action: { beginEdit(conversation) }) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Bocil.subtext)
+                        .frame(width: 26, height: 26)
+                        .background(Color.white)
+                        .overlay(Rectangle().stroke(Bocil.hairline, lineWidth: 1.5))
+                }
+                .buttonStyle(.plain)
+
+                Text(conversation.durationLabel)
                     .font(Bocil.mono(13))
                     .foregroundColor(Bocil.subtext)
                     .frame(minWidth: 36, alignment: .trailing)
@@ -166,25 +259,56 @@ struct HistoryView: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 16)
-        .background(Bocil.surface)
-        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
+        .background(Color.white)
+        .overlay(Rectangle().stroke(isEditing ? Bocil.accentSoft : Bocil.cardBorder, lineWidth: 2))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !isEditing { selectedConversation = conversation }
+        }
     }
 
-    @ViewBuilder
-    private func filterRow(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
+    // MARK: - Title editing
+
+    private func beginEdit(_ conversation: Conversation) {
+        editingID = conversation.id
+        draftTitle = conversation.title ?? ""
+        titleFieldFocused = true
+    }
+
+    private func commitEdit(_ conversation: Conversation) {
+        vm.rename(conversation, to: draftTitle)
+        editingID = nil
+        draftTitle = ""
+    }
+
+    // MARK: - Empty state
+
+    private func emptyState(_ message: String) -> some View {
+        VStack(spacing: 10) {
+            Text("⌾")
+                .font(.system(size: 34))
+                .foregroundColor(Bocil.faint)
+            Text(message)
                 .font(Bocil.mono(14))
-                .foregroundColor(Bocil.ink)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(isSelected ? Bocil.bg : Bocil.surface)
+                .foregroundColor(Bocil.faint)
         }
-        .buttonStyle(.plain)
-        .overlay(Rectangle().fill(Bocil.bg).frame(height: 1), alignment: .bottom)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 240)
+    }
+
+    // MARK: - Date formatting helpers
+
+    private static func shortDate(_ date: Date) -> String {
+        let f = DateFormatter(); f.dateFormat = "MMM d"
+        return f.string(from: date)
+    }
+
+    private static func longDate(_ date: Date) -> String {
+        let f = DateFormatter(); f.dateFormat = "MMM d, yyyy"
+        return f.string(from: date)
     }
 }
 
 #Preview {
-    HistoryView()
+    HistoryView().frame(width: 1000, height: 700)
 }
