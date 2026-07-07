@@ -24,7 +24,6 @@ private let weekLabels = ["M", "T", "W", "T", "F", "S", "S"]
 // MARK: - CalendarView
 
 struct CalendarView: View {
-    @EnvironmentObject var googleService: GoogleCalendarService
     @StateObject private var backendService = CalendarBackendService()
     @StateObject private var tasksService = TasksBackendService()
 
