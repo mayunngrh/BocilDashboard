@@ -32,7 +32,7 @@ struct VoiceBubbleView: View {
             Button(action: { isPlaying.toggle() }) {
                 Text(isPlaying ? "❚❚" : "▶")
                     .font(.system(size: 11))
-                    .foregroundColor(isUser ? Bocil.ink : Bocil.accent)
+                    .foregroundColor(isUser ? Bocil.onAccent : Bocil.accent)
                     .frame(width: 30, height: 30)
                     .background(isUser ? Color.white.opacity(0.6) : Bocil.bg)
                     .overlay(Rectangle().stroke(borderColor, lineWidth: 1.5))
@@ -41,17 +41,17 @@ struct VoiceBubbleView: View {
 
             WaveformView(
                 bars: WaveformView.mockBars(seed: message.id.hashValue),
-                color: isUser ? Bocil.ink.opacity(0.55) : Bocil.cardBorder,
+                color: isUser ? Bocil.onAccent.opacity(0.55) : Bocil.cardBorder,
                 height: 22
             )
 
             Text(message.durationLabel)
                 .font(Bocil.mono(12))
-                .foregroundColor(isUser ? Bocil.ink : Bocil.subtext)
+                .foregroundColor(isUser ? Bocil.onAccent : Bocil.subtext)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(isUser ? Bocil.accentSoft : Color.white)
+        .background(isUser ? Bocil.accentSoft : Bocil.surface)
         .overlay(Rectangle().stroke(borderColor, lineWidth: 2))
     }
 

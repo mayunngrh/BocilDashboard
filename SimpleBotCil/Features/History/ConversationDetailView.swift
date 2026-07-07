@@ -34,7 +34,7 @@ struct ConversationDetailView: View {
                     .foregroundColor(Bocil.accent)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
-                    .background(Color.white)
+                    .background(Bocil.surface)
                     .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
             }
             .buttonStyle(.plain)
@@ -52,7 +52,7 @@ struct ConversationDetailView: View {
         }
         .padding(.horizontal, 32)
         .padding(.vertical, 18)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().fill(Bocil.hairline).frame(height: 1), alignment: .bottom)
     }
 

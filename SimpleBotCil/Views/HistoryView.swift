@@ -31,18 +31,33 @@ struct HistoryView: View {
     // MARK: - History list
 
     private var listView: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                header
-                    .zIndex(1)
+        ZStack(alignment: .topTrailing) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    header
 
-                switch vm.filter {
-                case .thisWeek: weekContent
-                case .day(let date): dayContent(date)
+                    switch vm.filter {
+                    case .thisWeek: weekContent
+                    case .day(let date): dayContent(date)
+                    }
                 }
+                .padding(.horizontal, 32)
+                .padding(.vertical, 32)
             }
-            .padding(.horizontal, 32)
-            .padding(.vertical, 32)
+
+            // Dropdown drawn as the topmost sibling of the ScrollView: guarantees
+            // it wins hit-testing, and a plain Rectangle border keeps its corners
+            // square (an NSPopover would force rounded window chrome).
+            if filterOpen {
+                Color.black.opacity(0.001)
+                    .onTapGesture { closeDropdown() }
+
+                dropdownContent
+                    .background(Bocil.surface)
+                    .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
+                    .padding(.top, 74)
+                    .padding(.trailing, 32)
+            }
         }
     }
 
@@ -77,16 +92,10 @@ struct HistoryView: View {
                 .foregroundColor(Bocil.accent)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(Color.white)
+                .background(Bocil.surface)
                 .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
         }
         .buttonStyle(.plain)
-        // Popover lives in its own window, so calendar taps are never swallowed
-        // by the list underneath (which an inline overlay suffered from).
-        .popover(isPresented: $filterOpen, arrowEdge: .bottom) {
-            dropdownContent
-                .background(Color.white)
-        }
     }
 
     @ViewBuilder
@@ -121,7 +130,7 @@ struct HistoryView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(isSelected ? Bocil.bg : Color.white)
+                .background(isSelected ? Bocil.bg : Bocil.surface)
         }
         .buttonStyle(.plain)
         .overlay(Rectangle().fill(Bocil.bg).frame(height: 1), alignment: .bottom)
@@ -223,7 +232,7 @@ struct HistoryView: View {
             if isEditing {
                 Button("Save") { commitEdit(conversation) }
                     .font(Bocil.mono(12))
-                    .foregroundColor(Bocil.ink)
+                    .foregroundColor(Bocil.onAccent)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(Bocil.accentSoft)
@@ -246,7 +255,7 @@ struct HistoryView: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(Bocil.subtext)
                         .frame(width: 26, height: 26)
-                        .background(Color.white)
+                        .background(Bocil.surface)
                         .overlay(Rectangle().stroke(Bocil.hairline, lineWidth: 1.5))
                 }
                 .buttonStyle(.plain)
@@ -259,7 +268,7 @@ struct HistoryView: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 16)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().stroke(isEditing ? Bocil.accentSoft : Bocil.cardBorder, lineWidth: 2))
         .contentShape(Rectangle())
         .onTapGesture {

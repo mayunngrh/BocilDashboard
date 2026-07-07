@@ -46,7 +46,7 @@ struct MiniCalendarView: View {
         }
         .padding(12)
         .frame(width: 240)
-        .background(Color.white)
+        .background(Bocil.surface)
     }
 
     // MARK: - Header (month + year navigation)
@@ -86,7 +86,10 @@ struct MiniCalendarView: View {
         Button(action: { if let d = day.date { onSelect(d) } }) {
             Text("\(day.day)")
                 .font(Bocil.mono(10))
-                .foregroundColor(isToday ? .white : Bocil.ink)
+                .foregroundColor(
+                    isToday    ? Bocil.surface  :
+                    isSelected ? Bocil.onAccent : Bocil.ink
+                )
                 .frame(width: 24, height: 24)
                 .background(
                     isToday    ? Bocil.ink        :
