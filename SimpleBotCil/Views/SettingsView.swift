@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var appearanceManager: AppearanceManager
+    @ObservedObject var connectionSettings: RobotConnectionSettings
+
     @State private var personality: PersonalityMode = .calm
     @State private var language: LanguageMode       = .english
     @State private var taskReminders      = true
@@ -72,31 +74,49 @@ struct SettingsView: View {
                 .font(Bocil.header(20))
                 .foregroundColor(Bocil.ink)
 
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Bocil-Desk-01")
-                        .font(Bocil.mono(14))
-                        .foregroundColor(Bocil.ink)
-                    Text("paired")
+            HStack(spacing: 8) {
+                ForEach(RobotConnectionMode.allCases, id: \.self) { mode in
+                    Button(action: { connectionSettings.mode = mode }) {
+                        Text(mode.label)
+                            .font(Bocil.mono(12))
+                            .foregroundColor(connectionSettings.mode == mode ? Bocil.ink : Bocil.subtext)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .frame(maxWidth: .infinity)
+                            .background(connectionSettings.mode == mode ? Bocil.accentSoft : Color.white)
+                            .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if connectionSettings.mode == .wifi {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Robot IP address")
                         .font(Bocil.mono(12))
                         .foregroundColor(Bocil.subtext)
+                    TextField("e.g. 10.156.248.250", text: $connectionSettings.wifiHost)
+                        .textFieldStyle(.plain)
+                        .font(Bocil.mono(13))
+                        .foregroundColor(Bocil.ink)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+                    Text("Shown in the ESP32 serial log at boot, under [WiFi] Connected!")
+                        .font(Bocil.mono(10))
+                        .foregroundColor(Bocil.faint)
                 }
-                Spacer()
-                Circle().fill(Bocil.accentSoft).frame(width: 8, height: 8)
             }
 
             Rectangle().fill(Bocil.hairline).frame(height: 1)
 
-            Button(action: {}) {
-                Text("Forget this device")
-                    .font(Bocil.mono(12))
-                    .foregroundColor(Bocil.danger)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .overlay(Rectangle().stroke(Bocil.danger, lineWidth: 1.5))
+            HStack {
+                Text(connectionSettings.mode == .wifi ? connectionSettings.wifiHost.isEmpty ? "No IP set" : connectionSettings.wifiHost : "USB Serial")
+                    .font(Bocil.mono(14))
+                    .foregroundColor(Bocil.ink)
+                Spacer()
+                Circle().fill(Bocil.accentSoft).frame(width: 8, height: 8)
             }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -247,6 +267,6 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView()
+    SettingsView(connectionSettings: RobotConnectionSettings())
         .environmentObject(AppearanceManager())
 }

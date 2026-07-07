@@ -5,6 +5,7 @@ struct AppView: View {
     @EnvironmentObject var appearance:    AppearanceManager
     @EnvironmentObject var focusStore:    FocusStore
     @Environment(\.colorScheme) private var colorScheme
+    @StateObject private var connectionSettings = RobotConnectionSettings()
     @State private var selectedTab: BocilTab = .home
 
     var body: some View {
@@ -41,9 +42,9 @@ struct AppView: View {
                 }
             )
         case .calendar: CalendarView()
-        case .focus:    FocusView(serial: serial)
+        case .focus:    FocusView(serial: serial, connectionSettings: connectionSettings)
         case .history:  HistoryView()
-        case .settings: SettingsView()
+        case .settings: SettingsView(connectionSettings: connectionSettings)
         }
     }
 }

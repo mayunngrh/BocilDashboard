@@ -21,9 +21,9 @@ struct FocusModePage: View {
     private let sittingLimit: TimeInterval = 15 * 60   // 15 minutes
     private let phoneLimit: TimeInterval = 10          // 10 seconds
 
-    init(serial: SerialManager) {
+    init(serial: SerialManager, connectionSettings: RobotConnectionSettings) {
         self.serial = serial
-        let robotController = SerialRobotController(serialManager: serial)
+        let robotController = AnyRobotController(serial: serial, settings: connectionSettings)
         let posture = PostureDetector()
         let phoneDetector = PhoneDetector()
         _viewModel = StateObject(wrappedValue: FocusModeViewModel(
@@ -160,5 +160,5 @@ private func formatDuration(_ seconds: TimeInterval) -> String {
 }
 
 #Preview {
-    FocusModePage(serial: SerialManager())
+    FocusModePage(serial: SerialManager(), connectionSettings: RobotConnectionSettings())
 }
