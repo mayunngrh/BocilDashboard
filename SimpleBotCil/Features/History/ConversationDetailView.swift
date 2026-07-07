@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Chat-room style detail for a single conversation. Renders every voice message
-/// as a bubble (`VoiceBubbleView`), aligned by sender. Reached by tapping a row
-/// in `HistoryView`; `onBack` returns to the list.
+/// Chat-room style detail for a single conversation. Renders each turn as a
+/// user bubble, any tool-call chips, then the assistant's reply bubble.
+/// Reached by tapping a row in `HistoryView`; `onBack` returns to the list.
 struct ConversationDetailView: View {
     let conversation: Conversation
     let onBack: () -> Void
@@ -13,8 +13,19 @@ struct ConversationDetailView: View {
 
             ScrollView {
                 VStack(spacing: 16) {
-                    ForEach(conversation.messages) { message in
-                        VoiceBubbleView(message: message)
+                    ForEach(conversation.turns) { turn in
+                        if let user = turn.user {
+                            VoiceBubbleView(message: user)
+                        }
+                        ForEach(turn.toolCalls) { call in
+                            HStack {
+                                ToolCallChipView(call: call)
+                                Spacer(minLength: 60)
+                            }
+                        }
+                        if let assistant = turn.assistant {
+                            VoiceBubbleView(message: assistant)
+                        }
                     }
                 }
                 .padding(.horizontal, 32)
@@ -67,11 +78,23 @@ struct ConversationDetailView: View {
     ConversationDetailView(
         conversation: Conversation(
             createdAt: Date(),
+            endedAt: Date().addingTimeInterval(180),
             title: "Morning check-in",
-            messages: [
-                VoiceMessage(sender: .user, audioURL: URL(string: "https://x/a.m4a")!, duration: 5, timestamp: Date()),
-                VoiceMessage(sender: .llm, audioURL: URL(string: "https://x/b.m4a")!, duration: 8, timestamp: Date()),
-                VoiceMessage(sender: .user, audioURL: URL(string: "https://x/c.m4a")!, duration: 3, timestamp: Date()),
+            turns: [
+                ConversationTurn(
+                    turnId: "turn-1",
+                    user: VoiceMessage(id: "cmsg_1", sessionId: "s1", turnId: "turn-1", sender: .user, content: "Hey, how's it going?", audioURL: URL(string: "https://x/a.wav"), timestamp: Date()),
+                    toolCalls: [],
+                    assistant: VoiceMessage(id: "cmsg_2", sessionId: "s1", turnId: "turn-1", sender: .llm, content: "Doing well, how can I help?", audioURL: URL(string: "https://x/b.wav"), timestamp: Date())
+                ),
+                ConversationTurn(
+                    turnId: "turn-2",
+                    user: VoiceMessage(id: "cmsg_3", sessionId: "s1", turnId: "turn-2", sender: .user, content: "What's on my calendar today?", audioURL: URL(string: "https://x/c.wav"), timestamp: Date()),
+                    toolCalls: [
+                        ConversationToolCall(id: "ctool_1", tool: "calendar", action: "list", label: "list", status: "success", summary: "Found 2 event(s).", createdAt: Date())
+                    ],
+                    assistant: VoiceMessage(id: "cmsg_4", sessionId: "s1", turnId: "turn-2", sender: .llm, content: "You have a standup at 9 and lunch at noon.", audioURL: URL(string: "https://x/d.wav"), timestamp: Date())
+                ),
             ]
         ),
         onBack: {}

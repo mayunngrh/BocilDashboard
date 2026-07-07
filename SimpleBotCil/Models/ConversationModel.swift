@@ -2,9 +2,10 @@ import Foundation
 
 // MARK: - Conversation domain models
 //
-// These models mirror what the backend is expected to return. For now they are
-// populated by `MockConversationRepository`, but the shapes are intentionally
-// backend-friendly so swapping in a real API later requires no UI changes.
+// These mirror the Conversation History API's turn-grouped `/history` endpoint
+// (see CONVERSATION_HISTORY_API.md). The API is read-only, so there is no
+// per-message duration or waveform in the payload — duration is only knowable
+// once a message's audio has actually been downloaded.
 
 /// Who sent a given voice message.
 enum MessageSender {
@@ -12,28 +13,17 @@ enum MessageSender {
     case llm
 }
 
-/// A single voice message inside a conversation.
-/// The backend currently only returns voice (no text), so every message is audio.
+/// A single voice message inside a conversation. The backend always returns a
+/// transcript (`content`); audio is only present when it was actually saved
+/// for that turn, hence `audioURL` being optional.
 struct VoiceMessage: Identifiable {
-    let id: UUID
+    let id: String             // e.g. "cmsg_abc123"
+    let sessionId: String
+    let turnId: String         // pairs the user/assistant side of one turn
     let sender: MessageSender
-    let audioURL: URL          // dummy for now; real playable URL once backend is wired
-    let duration: TimeInterval // seconds
+    let content: String        // transcript text; "" if transcription failed
+    let audioURL: URL?         // nil if no audio was captured for this message
     let timestamp: Date
-
-    init(
-        id: UUID = UUID(),
-        sender: MessageSender,
-        audioURL: URL,
-        duration: TimeInterval,
-        timestamp: Date
-    ) {
-        self.id = id
-        self.sender = sender
-        self.audioURL = audioURL
-        self.duration = duration
-        self.timestamp = timestamp
-    }
 
     /// "09:41" style caption shown under each bubble.
     var timeCaption: String {
@@ -41,34 +31,58 @@ struct VoiceMessage: Identifiable {
         f.dateFormat = "HH:mm"
         return f.string(from: timestamp)
     }
-
-    /// "0:42" style duration label shown inside the bubble.
-    var durationLabel: String {
-        let total = Int(duration.rounded())
-        return String(format: "%d:%02d", total / 60, total % 60)
-    }
 }
 
-/// A conversation between the user and the LLM, made up of voice messages.
+/// One sub-agent lookup (`tasks`, `calendar`, `web_search`) the model made
+/// while forming its reply to a turn. `tool`/`status` are kept as raw strings
+/// rather than a strict enum so an unrecognized future value degrades to the
+/// chip's default look instead of failing to decode the whole turn.
+struct ConversationToolCall: Identifiable {
+    let id: String
+    let tool: String
+    let action: String?
+    let label: String
+    let status: String          // "success" | "error" | "duplicate"
+    let summary: String?
+    let createdAt: Date
+}
+
+/// One turn: the user's side, any tool calls the model made while answering,
+/// and the assistant's reply. Either side can be `nil` (e.g. transcription
+/// failed for that half of the turn).
+struct ConversationTurn: Identifiable {
+    let turnId: String
+    let user: VoiceMessage?
+    let toolCalls: [ConversationToolCall]
+    let assistant: VoiceMessage?
+
+    var id: String { turnId }
+}
+
+/// A conversation between the user and the LLM, made up of turns.
+/// Maps 1:1 to a `VoiceSession` (one WebSocket connection).
 struct Conversation: Identifiable {
     let id: UUID
-    let createdAt: Date
-    let messages: [VoiceMessage]
-    /// User-assigned title. The backend only returns raw audio collections with
-    /// no name, so this is `nil` until the user renames the conversation via
-    /// Edit mode. Use `displayTitle` for anything shown on screen.
+    let createdAt: Date        // session.startedAt
+    let endedAt: Date?         // session.endedAt; nil while the session is still live
+    let turns: [ConversationTurn]
+    /// User-assigned title. The API returns no name for a session, so this is
+    /// `nil` until the user renames it via Edit mode. Renaming is local-only —
+    /// the history API has no write endpoint, so it won't survive a reload.
     var title: String?
 
     init(
         id: UUID = UUID(),
         createdAt: Date,
+        endedAt: Date? = nil,
         title: String? = nil,
-        messages: [VoiceMessage]
+        turns: [ConversationTurn]
     ) {
         self.id = id
         self.createdAt = createdAt
+        self.endedAt = endedAt
         self.title = title
-        self.messages = messages
+        self.turns = turns
     }
 
     /// Title shown in the UI: the user-assigned name, or a sensible
@@ -80,14 +94,15 @@ struct Conversation: Identifiable {
         return "Voice chat · \(f.string(from: createdAt))"
     }
 
-    /// Combined length of every message in the conversation.
-    var totalDuration: TimeInterval {
-        messages.reduce(0) { $0 + $1.duration }
+    /// Number of voice messages (both sides of every turn) — shown on the list card.
+    var messageCount: Int {
+        turns.reduce(0) { $0 + ($1.user != nil ? 1 : 0) + ($1.assistant != nil ? 1 : 0) }
     }
 
-    /// "1:15" style total-duration label for the list card.
+    /// "1:15" session length (endedAt − createdAt), or "Live" while ongoing.
     var durationLabel: String {
-        let total = Int(totalDuration.rounded())
+        guard let endedAt else { return "Live" }
+        let total = Int(endedAt.timeIntervalSince(createdAt).rounded())
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 

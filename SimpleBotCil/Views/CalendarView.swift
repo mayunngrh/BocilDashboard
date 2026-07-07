@@ -4,6 +4,7 @@ import SwiftUI
 
 private func daysInGrid(for month: Date) -> [CalendarDay] {
     var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone.current
     cal.firstWeekday = 2
     let comps    = cal.dateComponents([.year, .month], from: month)
     let firstDay = cal.date(from: comps)!
@@ -211,14 +212,16 @@ struct CalendarView: View {
             VStack(spacing: 2) {
                 Text("\(day.day)")
                     .font(Bocil.mono(10))
-                    .foregroundColor(isToday ? Bocil.surface : Bocil.ink)
+                    .foregroundColor(isToday ? Bocil.onAccent : Bocil.ink)
                     .frame(width: 22, height: 22)
-                    .background(
-                        isToday    ? Bocil.ink        :
-                        isSelected ? Bocil.accentSoft : Color.clear
-                    )
+                    .background(isToday ? Bocil.accentSoft : Color.clear)
+                    .overlay {
+                        if isSelected && !isToday {
+                            Rectangle().stroke(Bocil.accentSoft, lineWidth: 1.5)
+                        }
+                    }
                 Circle()
-                    .fill(hasDot ? (isToday ? Bocil.surface.opacity(0.9) : Bocil.subtext) : Color.clear)
+                    .fill(hasDot ? (isToday ? Bocil.onAccent : Bocil.subtext) : Color.clear)
                     .frame(width: 4, height: 4)
             }
         }
@@ -490,6 +493,25 @@ struct CalendarView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(20)
+            } else if let error = tasksService.error {
+                VStack(alignment: .center, spacing: 10) {
+                    Text(error)
+                        .font(Bocil.mono(11))
+                        .foregroundColor(Bocil.danger)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(action: { Task { await tasksService.fetchTasks() } }) {
+                        Text("Retry")
+                            .font(Bocil.mono(11))
+                            .foregroundColor(Bocil.ink)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .overlay(Rectangle().stroke(Bocil.danger, lineWidth: 1.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(20)
             } else if tasksService.tasks.isEmpty {
                 VStack(alignment: .center, spacing: 12) {
                     Text("No tasks")
@@ -517,10 +539,22 @@ struct CalendarView: View {
     @ViewBuilder
     private func taskRow(_ task: BackendTask) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: (task.completed ?? false) ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 14))
-                .foregroundColor((task.completed ?? false) ? Bocil.accent : Bocil.subtext)
-                .padding(.top, 2)
+            Button(action: { Task { await tasksService.toggleCompletion(task) } }) {
+                ZStack {
+                    Rectangle()
+                        .fill((task.completed ?? false) ? Bocil.ink : Color.clear)
+                    Rectangle()
+                        .stroke(Bocil.cardBorder, lineWidth: 1.5)
+                    if task.completed ?? false {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(Bocil.surface)
+                    }
+                }
+                .frame(width: 14, height: 14)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title)
@@ -529,13 +563,20 @@ struct CalendarView: View {
                     .strikethrough(task.completed ?? false)
                     .lineLimit(2)
 
-                if let due = task.due {
-                    Text(due)
+                if let due = task.dueAt {
+                    Text(Self.formatTaskDue(due))
                         .font(Bocil.mono(9))
                         .foregroundColor(Bocil.subtext)
                 }
             }
             Spacer()
+
+            Button(action: { Task { await tasksService.deleteTask(task) } }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Bocil.faint)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -675,7 +716,7 @@ struct CalendarView: View {
                 print("[CalendarView] Start date UTC: \(startUTC)")
                 print("[CalendarView] End date UTC: \(endUTC)")
 
-                let url = URL(string: "http://10.64.52.184:8080/api/v1/calendar/events")!
+                let url = URL(string: "http://10.235.115.130:8080/api/v1/calendar/events")!
                 print("[CalendarView] POST URL: \(url)")
 
                 var request = URLRequest(url: url)
@@ -802,6 +843,15 @@ struct CalendarView: View {
                 taskTitle = ""
             }
         }
+    }
+
+    /// "Jul 7, 11:00 AM" from the task's raw ISO 8601 `dueAt`; falls back to the
+    /// raw string if it doesn't parse (defensive against a future format change).
+    private static func formatTaskDue(_ dueAt: String) -> String {
+        guard let date = ISO8601DateFormatter().date(from: dueAt) else { return dueAt }
+        let f = DateFormatter()
+        f.dateFormat = "MMM d, h:mm a"
+        return f.string(from: date)
     }
 }
 
