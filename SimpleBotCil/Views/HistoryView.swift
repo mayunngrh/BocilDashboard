@@ -3,12 +3,16 @@ import SwiftUI
 struct HistoryView: View {
     @StateObject private var vm = HistoryViewModel()
 
-    @State private var editMode = false
     @State private var selectedConversation: Conversation? = nil
 
-    // "Pick Date" popover state
-    @State private var showDatePicker = false
-    @State private var pickedDate = Date()
+    // Filter dropdown state
+    @State private var filterOpen = false
+    @State private var showCalendar = false
+
+    // Per-row title editing state
+    @State private var editingID: UUID? = nil
+    @State private var draftTitle = ""
+    @FocusState private var titleFieldFocused: Bool
 
     var body: some View {
         Group {
@@ -50,28 +54,90 @@ struct HistoryView: View {
 
             Spacer()
 
-            HStack(spacing: 8) {
-                filterChip(label: "This Week", isSelected: vm.filter == .thisWeek) {
-                    vm.filter = .thisWeek
-                }
-
-                pickDateChip
-
-                Button(action: { editMode.toggle() }) {
-                    Text(editMode ? "Done" : "Edit")
-                        .font(Bocil.mono(14))
-                        .foregroundColor(editMode ? Bocil.ink : Bocil.subtext)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                        .background(editMode ? Bocil.accentSoft : Color.white)
-                        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
-                }
-                .buttonStyle(.plain)
-            }
+            filterButton
         }
     }
 
-    // MARK: - "This Week" grouped content
+    // MARK: - Filter button + dropdown
+
+    private var filterLabel: String {
+        switch vm.filter {
+        case .thisWeek: return "This week"
+        case .day(let d): return Self.shortDate(d)
+        }
+    }
+
+    private var filterButton: some View {
+        Button(action: {
+            showCalendar = false
+            filterOpen.toggle()
+        }) {
+            Text("Filter: \(filterLabel) ▾")
+                .font(Bocil.mono(14))
+                .foregroundColor(Bocil.accent)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(Color.white)
+                .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
+        }
+        .buttonStyle(.plain)
+        // Popover lives in its own window, so calendar taps are never swallowed
+        // by the list underneath (which an inline overlay suffered from).
+        .popover(isPresented: $filterOpen, arrowEdge: .bottom) {
+            dropdownContent
+                .background(Color.white)
+        }
+    }
+
+    @ViewBuilder
+    private var dropdownContent: some View {
+        if showCalendar {
+            // Mini calendar styled after the Calendar page; picking a day applies
+            // the filter and closes the dropdown.
+            MiniCalendarView(selectedDate: pickedDate) { date in
+                vm.filter = .day(date)
+                closeDropdown()
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                dropdownRow(label: "This week", isSelected: vm.filter == .thisWeek) {
+                    vm.filter = .thisWeek
+                    closeDropdown()
+                }
+                dropdownRow(label: "Pick date", isSelected: pickedDate != nil) {
+                    showCalendar = true
+                }
+            }
+            .frame(width: 160)
+        }
+    }
+
+    @ViewBuilder
+    private func dropdownRow(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(Bocil.mono(14))
+                .foregroundColor(Bocil.ink)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(isSelected ? Bocil.bg : Color.white)
+        }
+        .buttonStyle(.plain)
+        .overlay(Rectangle().fill(Bocil.bg).frame(height: 1), alignment: .bottom)
+    }
+
+    private var pickedDate: Date? {
+        if case .day(let d) = vm.filter { return d }
+        return nil
+    }
+
+    private func closeDropdown() {
+        filterOpen = false
+        showCalendar = false
+    }
+
+    // MARK: - "This week" grouped content
 
     @ViewBuilder
     private var weekContent: some View {
@@ -97,7 +163,7 @@ struct HistoryView: View {
         }
     }
 
-    // MARK: - "Pick Date" content
+    // MARK: - "Pick date" content
 
     @ViewBuilder
     private func dayContent(_ date: Date) -> some View {
@@ -114,114 +180,105 @@ struct HistoryView: View {
     }
 
     // MARK: - Conversation card
-    // Keeps the original card design (play glyph, waveform, title, time,
-    // duration). The whole card opens the chat detail; Edit mode swaps in
-    // rename + delete affordances.
+    // The card itself is a tap target (opens the chat detail); the play and
+    // pencil controls are separate buttons layered on top. Keeping the card
+    // out of a `Button` wrapper lets the inline TextField receive focus.
 
     @ViewBuilder
     private func conversationRow(_ conversation: Conversation) -> some View {
-        Button(action: { if !editMode { selectedConversation = conversation } }) {
-            HStack(spacing: 16) {
-                Text("▶")
-                    .font(.system(size: 12))
-                    .foregroundColor(Bocil.accent)
-                    .frame(width: 36, height: 36)
-                    .background(Bocil.bg)
-                    .overlay(Rectangle().stroke(Bocil.accentSoft, lineWidth: 2))
+        let isEditing = editingID == conversation.id
 
-                WaveformView(bars: WaveformView.mockBars(seed: conversation.id.hashValue))
+        HStack(spacing: 16) {
+            Text("▶")
+                .font(.system(size: 12))
+                .foregroundColor(Bocil.accent)
+                .frame(width: 36, height: 36)
+                .background(Bocil.bg)
+                .overlay(Rectangle().stroke(Bocil.accentSoft, lineWidth: 2))
 
-                VStack(alignment: .leading, spacing: 4) {
-                    if editMode {
-                        TextField("Title", text: Binding(
-                            get: { conversation.title },
-                            set: { vm.rename(conversation, to: $0) }
-                        ))
+            WaveformView(bars: WaveformView.mockBars(seed: conversation.id.hashValue))
+
+            VStack(alignment: .leading, spacing: 4) {
+                if isEditing {
+                    TextField(conversation.displayTitle, text: $draftTitle)
                         .textFieldStyle(.plain)
                         .font(Bocil.mono(16))
                         .foregroundColor(Bocil.ink)
+                        .focused($titleFieldFocused)
+                        .onSubmit { commitEdit(conversation) }
                         .padding(4)
-                        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1))
-                    } else {
-                        Text(conversation.title)
-                            .font(Bocil.mono(16))
-                            .foregroundColor(Bocil.ink)
-                    }
-                    Text("\(conversation.startTimeLabel) · \(conversation.messages.count) voice messages")
-                        .font(Bocil.mono(12))
-                        .foregroundColor(Bocil.faint)
-                }
-
-                Spacer()
-
-                if editMode {
-                    Button("Delete") { vm.delete(conversation) }
-                        .font(Bocil.mono(12))
-                        .foregroundColor(Bocil.danger)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .overlay(Rectangle().stroke(Bocil.danger, lineWidth: 1.5))
-                        .buttonStyle(.plain)
+                        .overlay(Rectangle().stroke(Bocil.accentSoft, lineWidth: 1.5))
                 } else {
-                    Text(conversation.durationLabel)
-                        .font(Bocil.mono(13))
-                        .foregroundColor(Bocil.subtext)
-                        .frame(minWidth: 36, alignment: .trailing)
+                    Text(conversation.displayTitle)
+                        .font(Bocil.mono(16))
+                        .foregroundColor(conversation.title == nil ? Bocil.subtext : Bocil.ink)
                 }
+                Text("\(conversation.startTimeLabel) · \(conversation.messages.count) voice messages")
+                    .font(Bocil.mono(12))
+                    .foregroundColor(Bocil.faint)
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 16)
-            .background(Color.white)
-            .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
 
-    // MARK: - Filter controls
+            Spacer()
 
-    @ViewBuilder
-    private func filterChip(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(Bocil.mono(14))
-                .foregroundColor(isSelected ? Bocil.ink : Bocil.accent)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(isSelected ? Bocil.accentSoft : Color.white)
-                .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
-        }
-        .buttonStyle(.plain)
-    }
+            if isEditing {
+                Button("Save") { commitEdit(conversation) }
+                    .font(Bocil.mono(12))
+                    .foregroundColor(Bocil.ink)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Bocil.accentSoft)
+                    .buttonStyle(.plain)
 
-    private var pickDateChip: some View {
-        let isPicked: Bool = { if case .day = vm.filter { return true }; return false }()
-        let label: String = {
-            if case .day(let d) = vm.filter { return Self.shortDate(d) }
-            return "Pick Date ▾"
-        }()
-
-        return Button(action: { showDatePicker.toggle() }) {
-            Text(label)
-                .font(Bocil.mono(14))
-                .foregroundColor(isPicked ? Bocil.ink : Bocil.accent)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(isPicked ? Bocil.accentSoft : Color.white)
-                .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
-        }
-        .buttonStyle(.plain)
-        .popover(isPresented: $showDatePicker, arrowEdge: .bottom) {
-            // Native monthly calendar with month + year switching.
-            DatePicker("", selection: $pickedDate, displayedComponents: .date)
-                .datePickerStyle(.graphical)
-                .labelsHidden()
-                .padding()
-                .onChange(of: pickedDate) { _, newValue in
-                    vm.filter = .day(newValue)
-                    showDatePicker = false
+                Button("Delete") {
+                    vm.delete(conversation)
+                    editingID = nil
                 }
+                .font(Bocil.mono(12))
+                .foregroundColor(Bocil.danger)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .overlay(Rectangle().stroke(Bocil.danger, lineWidth: 1.5))
+                .buttonStyle(.plain)
+            } else {
+                // Small pencil: puts just this card into title-edit mode.
+                Button(action: { beginEdit(conversation) }) {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Bocil.subtext)
+                        .frame(width: 26, height: 26)
+                        .background(Color.white)
+                        .overlay(Rectangle().stroke(Bocil.hairline, lineWidth: 1.5))
+                }
+                .buttonStyle(.plain)
+
+                Text(conversation.durationLabel)
+                    .font(Bocil.mono(13))
+                    .foregroundColor(Bocil.subtext)
+                    .frame(minWidth: 36, alignment: .trailing)
+            }
         }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .background(Color.white)
+        .overlay(Rectangle().stroke(isEditing ? Bocil.accentSoft : Bocil.cardBorder, lineWidth: 2))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !isEditing { selectedConversation = conversation }
+        }
+    }
+
+    // MARK: - Title editing
+
+    private func beginEdit(_ conversation: Conversation) {
+        editingID = conversation.id
+        draftTitle = conversation.title ?? ""
+        titleFieldFocused = true
+    }
+
+    private func commitEdit(_ conversation: Conversation) {
+        vm.rename(conversation, to: draftTitle)
+        editingID = nil
+        draftTitle = ""
     }
 
     // MARK: - Empty state

@@ -54,20 +54,30 @@ struct Conversation: Identifiable {
     let id: UUID
     let createdAt: Date
     let messages: [VoiceMessage]
-    /// Display title. Optional on the backend; we keep it mutable so the existing
-    /// "Edit / rename" affordance in the history list keeps working.
-    var title: String
+    /// User-assigned title. The backend only returns raw audio collections with
+    /// no name, so this is `nil` until the user renames the conversation via
+    /// Edit mode. Use `displayTitle` for anything shown on screen.
+    var title: String?
 
     init(
         id: UUID = UUID(),
         createdAt: Date,
-        title: String,
+        title: String? = nil,
         messages: [VoiceMessage]
     ) {
         self.id = id
         self.createdAt = createdAt
         self.title = title
         self.messages = messages
+    }
+
+    /// Title shown in the UI: the user-assigned name, or a sensible
+    /// date-based placeholder ("Voice chat · Jul 7") when unnamed.
+    var displayTitle: String {
+        if let title, !title.isEmpty { return title }
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return "Voice chat · \(f.string(from: createdAt))"
     }
 
     /// Combined length of every message in the conversation.

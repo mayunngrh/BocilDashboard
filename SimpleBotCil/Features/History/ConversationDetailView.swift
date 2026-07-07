@@ -40,7 +40,7 @@ struct ConversationDetailView: View {
             .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(conversation.title)
+                Text(conversation.displayTitle)
                     .font(Bocil.header(20))
                     .foregroundColor(Bocil.ink)
                 Text(dateSubtitle)

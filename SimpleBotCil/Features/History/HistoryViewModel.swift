@@ -57,9 +57,12 @@ final class HistoryViewModel: ObservableObject {
 
     // MARK: - Editing (kept so the list's Edit mode keeps working)
 
+    /// Renames a conversation. Clearing the field stores `nil`, which makes the
+    /// UI fall back to the date-based placeholder title.
     func rename(_ conversation: Conversation, to title: String) {
         guard let idx = conversations.firstIndex(where: { $0.id == conversation.id }) else { return }
-        conversations[idx].title = title
+        let isBlank = title.trimmingCharacters(in: .whitespaces).isEmpty
+        conversations[idx].title = isBlank ? nil : title
     }
 
     func delete(_ conversation: Conversation) {
