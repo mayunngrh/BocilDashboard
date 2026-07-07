@@ -24,22 +24,16 @@ private let weekLabels = ["M", "T", "W", "T", "F", "S", "S"]
 // MARK: - CalendarView
 
 struct CalendarView: View {
+    @EnvironmentObject private var calendarStore: CalendarStore
+
     @State private var displayedMonth = Date()
     @State private var selectedDate   = Date()
     @State private var showAddEvent   = false
     @State private var draft          = NewEventDraft()
 
-    @State private var events: [CalendarEvent] = [
-        CalendarEvent(title: "Team Standup",   hour: 9,  minute: 0,  location: "Zoom",        duration: "30m"),
-        CalendarEvent(title: "UI Review",       hour: 11, minute: 0,  location: "Design Room", duration: "1h"),
-        CalendarEvent(title: "Design Critique", hour: 14, minute: 0,  location: "Figma call",  duration: "1h"),
-        CalendarEvent(title: "Assignment Due",  hour: 17, minute: 0,  location: "",            duration: "", isImportant: true),
-        CalendarEvent(title: "Personal Time",   hour: 19, minute: 30, location: "",            duration: "1h"),
-    ]
-
     private var selectedDateEvents: [CalendarEvent] {
         let cal = Calendar.current
-        return events
+        return calendarStore.events
             .filter { cal.isDate($0.date, inSameDayAs: selectedDate) }
             .sorted { $0.hour * 60 + $0.minute < $1.hour * 60 + $1.minute }
     }
@@ -160,7 +154,7 @@ struct CalendarView: View {
         let isToday    = day.date.map { cal.isDateInToday($0) }    ?? false
         let isSelected = day.date.map { cal.isDate($0, inSameDayAs: selectedDate) } ?? false
         let hasDot     = day.date.map { d in
-            events.contains { cal.isDate($0.date, inSameDayAs: d) }
+            calendarStore.events.contains { cal.isDate($0.date, inSameDayAs: d) }
         } ?? false
 
         Button(action: { if let d = day.date { selectedDate = d } }) {
@@ -392,7 +386,7 @@ struct CalendarView: View {
 
     private func commitEvent() {
         guard !draft.title.isEmpty else { return }
-        events.append(CalendarEvent(
+        calendarStore.events.append(CalendarEvent(
             title:    draft.title,
             date:     selectedDate,
             hour:     draft.hour,
@@ -413,5 +407,7 @@ struct CalendarView: View {
 }
 
 #Preview {
-    CalendarView().frame(width: 1000, height: 700)
+    CalendarView()
+        .environmentObject(CalendarStore())
+        .frame(width: 1000, height: 700)
 }

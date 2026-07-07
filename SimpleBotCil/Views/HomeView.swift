@@ -111,11 +111,14 @@ struct HomeView: View {
                     .foregroundColor(Bocil.ink)
                 Spacer()
                 Button(action: toggleEditing) {
-                    HStack(spacing: 5) {
-                        Image(systemName: isEditing ? "checkmark" : "pencil")
-                            .font(.system(size: 11, weight: .medium))
-                        Text(isEditing ? "Save" : "Edit")
-                            .font(Bocil.mono(14))
+                    Group {
+                        if isEditing {
+                            Text("Save")
+                                .font(Bocil.mono(14))
+                        } else {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 12, weight: .medium))
+                        }
                     }
                     .foregroundColor(isEditing ? Bocil.onAccent : Bocil.ink)
                     .padding(.horizontal, 10)
@@ -235,10 +238,12 @@ struct HomeView: View {
                 Text(label)
                     .font(Bocil.mono(16))
                     .foregroundColor(empty ? Bocil.faint : Bocil.ink)
+                    .multilineTextAlignment(.trailing)
                 if !sub.isEmpty {
                     Text(sub)
                         .font(Bocil.mono(14))
                         .foregroundColor(Bocil.subtext)
+                        .multilineTextAlignment(.trailing)
                 }
             }
         }

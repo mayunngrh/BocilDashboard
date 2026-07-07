@@ -50,7 +50,7 @@ struct HistoryView: View {
                                 .foregroundColor(Bocil.accent)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 9)
-                                .background(Color.white)
+                                .background(Bocil.surface)
                                 .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
                         }
                         .buttonStyle(.plain)
@@ -67,7 +67,7 @@ struct HistoryView: View {
                                     }
                                 }
                                 .fixedSize(horizontal: true, vertical: false)
-                                .background(Color.white)
+                                .background(Bocil.surface)
                                 .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
                                 .offset(y: 38)
                             }
@@ -79,7 +79,7 @@ struct HistoryView: View {
                                 .foregroundColor(editMode ? Bocil.ink : Bocil.subtext)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 9)
-                                .background(editMode ? Bocil.accentSoft : Color.white)
+                                .background(editMode ? Bocil.accentSoft : Bocil.surface)
                                 .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
                         }
                         .buttonStyle(.plain)
@@ -166,7 +166,7 @@ struct HistoryView: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 16)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
     }
 
@@ -178,7 +178,7 @@ struct HistoryView: View {
                 .foregroundColor(Bocil.ink)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(isSelected ? Bocil.bg : Color.white)
+                .background(isSelected ? Bocil.bg : Bocil.surface)
         }
         .buttonStyle(.plain)
         .overlay(Rectangle().fill(Bocil.bg).frame(height: 1), alignment: .bottom)

@@ -45,10 +45,10 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(mode.rawValue)
                                 .font(Bocil.header(16))
-                                .foregroundColor(Bocil.ink)
+                                .foregroundColor(personality == mode ? Bocil.onAccent : Bocil.ink)
                             Text(mode.subtitle)
                                 .font(Bocil.mono(14))
-                                .foregroundColor(personality == mode ? Bocil.ink : Bocil.subtext)
+                                .foregroundColor(personality == mode ? Bocil.onAccent : Bocil.subtext)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 16)
@@ -124,7 +124,7 @@ struct SettingsView: View {
                         Button(action: { remindBefore = min }) {
                             Text("\(min)m")
                                 .font(Bocil.mono(12))
-                                .foregroundColor(remindBefore == min ? Bocil.ink : Bocil.subtext)
+                                .foregroundColor(remindBefore == min ? Bocil.onAccent : Bocil.subtext)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
                                 .background(remindBefore == min ? Bocil.accentSoft : Bocil.surface)
@@ -173,10 +173,10 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(mode.rawValue)
                                 .font(Bocil.header(16))
-                                .foregroundColor(Bocil.ink)
+                                .foregroundColor(appearanceManager.mode == mode ? Bocil.onAccent : Bocil.ink)
                             Text(mode.subtitle)
                                 .font(Bocil.mono(14))
-                                .foregroundColor(appearanceManager.mode == mode ? Bocil.ink : Bocil.subtext)
+                                .foregroundColor(appearanceManager.mode == mode ? Bocil.onAccent : Bocil.subtext)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 16)
@@ -206,10 +206,10 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(mode.rawValue)
                                 .font(Bocil.header(16))
-                                .foregroundColor(Bocil.ink)
+                                .foregroundColor(language == mode ? Bocil.onAccent : Bocil.ink)
                             Text(mode.subtitle)
                                 .font(Bocil.mono(14))
-                                .foregroundColor(language == mode ? Bocil.ink : Bocil.subtext)
+                                .foregroundColor(language == mode ? Bocil.onAccent : Bocil.subtext)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 16)
