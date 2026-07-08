@@ -31,6 +31,11 @@ struct HomeView: View {
     var onOpenFocus:    () -> Void = {}
     var onStartFocus:   () -> Void = {}
 
+    /// Shared with `AppView`'s top nav bar — the floating nav next to the
+    /// robot writes to the same selection, so tapping it switches tabs exactly
+    /// like clicking the top bar.
+    @Binding var selectedTab: BocilTab
+
     @EnvironmentObject private var focusStore:     FocusStore
     @EnvironmentObject private var profileService: ProfileBackendService
 
@@ -53,16 +58,10 @@ struct HomeView: View {
         HStack(alignment: .top, spacing: 48) {
             leftPanel
             rightPanel.frame(width: 380)
-            Spacer()
-            robotEye.frame(width: 200, height: 200)
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task { await loadHomeData() }
-    }
-
-    private var robotEye: some View {
-        RobotEyeView()
     }
 
     /// Loads everything the Home page shows from the backend: the profile
@@ -91,12 +90,31 @@ struct HomeView: View {
     // MARK: - Left panel
 
     private var leftPanel: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text(greetingLine)
-                .font(Bocil.header(36))
-                .foregroundColor(Bocil.ink)
+        ZStack(alignment: .topLeading) {
+            // Robot + orbiting nav sit behind, filling the full panel. The
+            // scaleEffect shrinks the rendered cluster 30% without changing
+            // its reserved layout size, which opens a margin on every edge —
+            // that's what keeps the orbit badges (which sit slightly outside
+            // the robot image) from clipping at the panel's bounds, at any
+            // window size.
+            ZStack {
+                RobotEyeView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            speechBubble
+                FloatingOrbitNav(selectedTab: $selectedTab)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .scaleEffect(0.7)
+            .offset(x: 60)
+
+            // Greeting + speech bubble float on top, anchored top-leading.
+            VStack(alignment: .leading, spacing: 20) {
+                Text(greetingLine)
+                    .font(Bocil.header(36))
+                    .foregroundColor(Bocil.ink)
+
+                speechBubble
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -125,6 +143,7 @@ struct HomeView: View {
             SpeechBubbleShape(tailHeight: tailH, tailWidth: tailW)
                 .stroke(Bocil.accentSoft, lineWidth: 1.5)
         )
+        .shadow(color: .black.opacity(0.16), radius: 12, x: 0, y: 6)
     }
 
     // MARK: - Right panel
@@ -387,7 +406,7 @@ struct HomeView: View {
 }
 
 #Preview {
-    HomeView()
+    HomeView(selectedTab: .constant(.home))
         .environmentObject(AppearanceManager())
         .environmentObject(CalendarStore())
         .environmentObject(FocusStore())

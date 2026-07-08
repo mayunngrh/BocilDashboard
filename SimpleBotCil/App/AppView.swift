@@ -39,7 +39,8 @@ struct AppView: View {
                 onStartFocus:   {
                     focusStore.pendingAutoStart = true
                     selectedTab = .focus
-                }
+                },
+                selectedTab: $selectedTab
             )
         case .calendar: CalendarView()
         case .focus:    FocusView(serial: serial, connectionSettings: connectionSettings)
