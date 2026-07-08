@@ -70,4 +70,5 @@ struct ComingSoonView: View {
         .environmentObject(AppearanceManager())
         .environmentObject(CalendarStore())
         .environmentObject(FocusStore())
+        .environmentObject(ProfileBackendService())
 }

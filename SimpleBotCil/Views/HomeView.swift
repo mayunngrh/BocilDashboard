@@ -31,9 +31,15 @@ struct HomeView: View {
     var onOpenFocus:    () -> Void = {}
     var onStartFocus:   () -> Void = {}
 
-    @EnvironmentObject private var calendarStore: CalendarStore
-    @EnvironmentObject private var focusStore:    FocusStore
+    @EnvironmentObject private var focusStore:     FocusStore
+    @EnvironmentObject private var profileService: ProfileBackendService
 
+    // The summary reads live backend data, not the local CalendarStore.
+    @StateObject private var calendarBackend = CalendarBackendService()
+    @StateObject private var tasksBackend     = TasksBackendService()
+
+    // Kept as an offline cache; the backend profile is the source of truth and
+    // overwrites these on load (see loadProfile()).
     @AppStorage("bocil.home.name") private var userName: String = ""
     @AppStorage("bocil.home.role") private var roleText: String = ""
 
@@ -50,6 +56,30 @@ struct HomeView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .task { await loadHomeData() }
+    }
+
+    /// Loads everything the Home page shows from the backend: the profile
+    /// (name/role/focus) plus today's calendar events and tasks that feed the
+    /// summary. Runs its three fetches concurrently.
+    private func loadHomeData() async {
+        let cal = Calendar.current
+        let startOfMonth = cal.date(from: cal.dateComponents([.year, .month], from: Date()))!
+        let endOfMonth = cal.date(byAdding: .month, value: 1, to: startOfMonth)!
+
+        async let profileFetch: Void = profileService.fetchProfile()
+        async let eventsFetch: Void = calendarBackend.fetchEvents(from: startOfMonth, to: endOfMonth)
+        async let tasksFetch: Void = tasksBackend.fetchTasks()
+        _ = await (profileFetch, eventsFetch, tasksFetch)
+
+        // Seed local caches from the profile (only overwrite name/role when the
+        // server actually has a value, so a locally set name isn't wiped before
+        // the first save syncs it up).
+        if let profile = profileService.profile {
+            if let name = profile.name, !name.isEmpty { userName = name }
+            if let role = profile.role, !role.isEmpty { roleText = role }
+            focusStore.seedTodayFocus(seconds: profile.focusSecondsToday)
+        }
     }
 
     // MARK: - Left panel
@@ -179,9 +209,29 @@ struct HomeView: View {
 
     // MARK: - Summary card
 
-    private var upcomingCount: Int { calendarStore.todayUpcomingCount }
-    private var questsCount:   Int { calendarStore.todayImportantCount }
-    private var focusMinutes:  Int { focusStore.totalTodayMinutes }
+    // Today's backend events, soonest first.
+    private var todayBackendEvents: [BackendCalendarEvent] {
+        let cal = Calendar.current
+        return calendarBackend.events
+            .filter { cal.isDate($0.startsAt, inSameDayAs: Date()) }
+            .sorted { $0.startsAt < $1.startsAt }
+    }
+
+    // All of today's events (regardless of whether they've started).
+    private var todayEventCount: Int { todayBackendEvents.count }
+
+    // Is there still an event later today? (drives the "next in …" sub-label)
+    private var hasUpcomingEvent: Bool {
+        let now = Date()
+        return todayBackendEvents.contains { $0.startsAt > now }
+    }
+
+    // Open (incomplete) tasks — the "tiny quests" still to do.
+    private var openTaskCount: Int {
+        tasksBackend.tasks.filter { !($0.completed ?? false) }.count
+    }
+
+    private var focusMinutes: Int { focusStore.totalTodayMinutes }
 
     private var summaryCard: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -195,21 +245,21 @@ struct HomeView: View {
 
             summaryRow(
                 icon:   "CalendarPixel",
-                value:  upcomingCount == 0 ? "0" : "\(upcomingCount)",
-                label:  upcomingCount == 0 ? "nothing scary yet"
-                        : upcomingCount == 1 ? "upcoming event" : "upcoming events",
-                sub:    upcomingCount == 0 ? "" : minsUntilNextText,
-                empty:  upcomingCount == 0,
+                value:  todayEventCount == 0 ? "0" : "\(todayEventCount)",
+                label:  todayEventCount == 0 ? "nothing scary yet"
+                        : todayEventCount == 1 ? "event today" : "events today",
+                sub:    hasUpcomingEvent ? minsUntilNextText : "",
+                empty:  todayEventCount == 0,
                 action: onOpenCalendar
             )
             Rectangle().fill(Bocil.hairline).frame(height: 1)
             summaryRow(
                 icon:   "ListPixel",
-                value:  questsCount == 0 ? "0" : "\(questsCount)",
-                label:  questsCount == 0 ? "looks pretty chill"
-                        : questsCount == 1 ? "tiny quest" : "tiny quests",
-                sub:    questsCount == 0 ? "" : "due today",
-                empty:  questsCount == 0,
+                value:  openTaskCount == 0 ? "0" : "\(openTaskCount)",
+                label:  openTaskCount == 0 ? "looks pretty chill"
+                        : openTaskCount == 1 ? "tiny quest" : "tiny quests",
+                sub:    openTaskCount == 0 ? "" : "to do",
+                empty:  openTaskCount == 0,
                 action: onOpenCalendar
             )
             Rectangle().fill(Bocil.hairline).frame(height: 1)
@@ -260,7 +310,9 @@ struct HomeView: View {
     }
 
     private var minsUntilNextText: String {
-        guard let mins = calendarStore.minutesUntilNext() else { return "today" }
+        let now = Date()
+        guard let next = todayBackendEvents.first(where: { $0.startsAt > now }) else { return "today" }
+        let mins = max(1, Int(next.startsAt.timeIntervalSince(now) / 60))
         return mins < 60 ? "in \(mins) min" : "in \(mins / 60)h \(mins % 60)m"
     }
 
@@ -318,6 +370,7 @@ struct HomeView: View {
             userName = draftName.trimmingCharacters(in: .whitespaces)
             roleText = draftRole.trimmingCharacters(in: .whitespaces)
             isEditing = false
+            Task { await profileService.updateProfile(name: userName, role: roleText) }
         } else {
             draftName = userName
             draftRole = roleText
@@ -332,5 +385,6 @@ struct HomeView: View {
         .environmentObject(AppearanceManager())
         .environmentObject(CalendarStore())
         .environmentObject(FocusStore())
+        .environmentObject(ProfileBackendService())
         .frame(width: 1100, height: 700)
 }

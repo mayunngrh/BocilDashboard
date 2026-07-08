@@ -830,13 +830,13 @@ struct CalendarView: View {
 
                 Rectangle().fill(Bocil.hairline).frame(height: 1)
 
-                detailRow(icon: "clock", text: Self.eventTimeRange(event))
-                detailRow(icon: "hourglass", text: Self.eventDurationLabel(event))
+                detailRow(asset: "CalendarPixel", text: Self.eventDateLabel(event))
+                detailRow(asset: "TimePixel", text: Self.eventTimeLabel(event))
                 if !event.location.isEmpty {
-                    detailRow(icon: "mappin.and.ellipse", text: event.location)
+                    detailRow(asset: "IconLocation", text: event.location)
                 }
                 if let notes = event.notes, !notes.isEmpty {
-                    detailRow(icon: "note.text", text: notes)
+                    detailRow(asset: "ListPixel", text: notes)
                 }
 
                 HStack {
@@ -856,10 +856,13 @@ struct CalendarView: View {
     }
 
     @ViewBuilder
-    private func detailRow(icon: String, text: String) -> some View {
+    private func detailRow(asset: String, text: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: icon)
-                .font(.system(size: 12))
+            Image(asset)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 14, height: 14)
                 .foregroundColor(Bocil.subtext)
                 .frame(width: 16, alignment: .center)
             Text(text)
@@ -870,15 +873,19 @@ struct CalendarView: View {
         }
     }
 
-    private static func eventTimeRange(_ event: BackendCalendarEvent) -> String {
+    private static func eventDateLabel(_ event: BackendCalendarEvent) -> String {
         let dayF = DateFormatter(); dayF.dateFormat = "EEE, MMM d"
-        let timeF = DateFormatter(); timeF.dateFormat = "HH:mm"
         let cal = Calendar.current
         if cal.isDate(event.startsAt, inSameDayAs: event.endsAt) {
-            return "\(dayF.string(from: event.startsAt))  ·  \(timeF.string(from: event.startsAt)) – \(timeF.string(from: event.endsAt))"
+            return dayF.string(from: event.startsAt)
         }
-        // Multi-day event: show the end day too.
-        return "\(dayF.string(from: event.startsAt)) \(timeF.string(from: event.startsAt)) → \(dayF.string(from: event.endsAt)) \(timeF.string(from: event.endsAt))"
+        // Multi-day event: show both days.
+        return "\(dayF.string(from: event.startsAt)) → \(dayF.string(from: event.endsAt))"
+    }
+
+    private static func eventTimeLabel(_ event: BackendCalendarEvent) -> String {
+        let timeF = DateFormatter(); timeF.dateFormat = "HH:mm"
+        return "\(timeF.string(from: event.startsAt)) – \(timeF.string(from: event.endsAt))  ·  \(eventDurationLabel(event))"
     }
 
     private static func eventDurationLabel(_ event: BackendCalendarEvent) -> String {

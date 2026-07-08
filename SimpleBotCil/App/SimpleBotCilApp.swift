@@ -7,6 +7,7 @@ struct SimpleBotCilApp: App {
     @StateObject private var appearance    = AppearanceManager()
     @StateObject private var calendarStore = CalendarStore()
     @StateObject private var focusStore    = FocusStore()
+    @StateObject private var profileService = ProfileBackendService()
 
     init() { FontLoader.register() }
 
@@ -16,6 +17,7 @@ struct SimpleBotCilApp: App {
                 .environmentObject(appearance)
                 .environmentObject(calendarStore)
                 .environmentObject(focusStore)
+                .environmentObject(profileService)
         }
     }
 }

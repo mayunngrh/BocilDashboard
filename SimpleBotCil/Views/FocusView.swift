@@ -15,6 +15,7 @@ private struct TimerAnchorKey: PreferenceKey {
 struct FocusView: View {
     @ObservedObject var serial: SerialManager
     @EnvironmentObject var focusStore: FocusStore
+    @EnvironmentObject var profileService: ProfileBackendService
 
     @StateObject private var camera = CameraManager()
     @StateObject private var detector = EmotionDetector()
@@ -166,6 +167,11 @@ struct FocusView: View {
         }
         .onChange(of: posture.currentDuration) { _, _ in checkSittingThreshold() }
         .onChange(of: phoneDetector.currentDuration) { _, _ in checkPhoneThreshold() }
+        // Each finished session posts its length to the backend once, additively.
+        .onChange(of: focusStore.completedSessionTick) { _, _ in
+            let seconds = focusStore.lastCompletedSeconds
+            Task { await profileService.addFocus(seconds: seconds) }
+        }
     }
 
     // MARK: - Threshold alerts
@@ -686,4 +692,5 @@ private func formatDuration(_ seconds: TimeInterval) -> String {
 #Preview {
     FocusView(serial: SerialManager(), connectionSettings: RobotConnectionSettings())
         .environmentObject(FocusStore())
+        .environmentObject(ProfileBackendService())
 }

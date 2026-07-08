@@ -14,8 +14,22 @@ final class FocusStore: ObservableObject {
     @Published var pendingAutoStart = false
     @Published var targetMinutes: Int? = nil  // nil = no time limit (count up)
 
+    // Bumped once each time a session finishes; `lastCompletedSeconds` holds
+    // that session's length. Views observe the tick to post it to the backend
+    // exactly once (a plain value change could miss two equal-length sessions).
+    @Published private(set) var completedSessionTick = 0
+    private(set) var lastCompletedSeconds = 0
+
     var totalTodayMinutes: Int {
         (todayFocusSeconds + (sessionActive ? currentSeconds : 0)) / 60
+    }
+
+    /// Seeds today's persisted total (from the backend on launch) so the Home
+    /// summary reflects focus logged in earlier runs. Ignored mid-session so a
+    /// refetch can't stomp a running count.
+    func seedTodayFocus(seconds: Int) {
+        guard !sessionActive else { return }
+        todayFocusSeconds = seconds
     }
 
     private var timer: Foundation.Timer?
@@ -39,7 +53,11 @@ final class FocusStore: ObservableObject {
     func stop() {
         timer?.invalidate()
         timer = nil
-        if sessionActive { todayFocusSeconds += currentSeconds }
+        if sessionActive {
+            todayFocusSeconds += currentSeconds
+            lastCompletedSeconds = currentSeconds
+            completedSessionTick += 1
+        }
         sessionActive = false
         currentSeconds = 0
         targetMinutes = nil
