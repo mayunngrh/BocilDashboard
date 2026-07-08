@@ -78,6 +78,16 @@ enum PersonalityMode: String, CaseIterable, Hashable {
         case .professional: return "Direct, efficient"
         }
     }
+
+    /// The backend config uses lowercase values ("calm", "energetic", …).
+    var apiValue: String { rawValue.lowercased() }
+
+    init?(apiValue: String) {
+        guard let mode = PersonalityMode.allCases.first(where: {
+            $0.rawValue.lowercased() == apiValue.lowercased()
+        }) else { return nil }
+        self = mode
+    }
 }
 
 enum AppearanceMode: String, CaseIterable, Hashable {

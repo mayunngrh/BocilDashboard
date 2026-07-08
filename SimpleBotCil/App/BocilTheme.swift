@@ -41,7 +41,7 @@ enum Bocil {
 // MARK: - Nav tabs
 
 enum BocilTab: String, CaseIterable, Identifiable {
-    case home = "HOME", calendar = "CALENDAR", focus = "FOCUS", history = "HISTORY", settings = "SETTINGS"
+    case home = "HOME", calendar = "CALENDAR", focus = "BOCAM", history = "HISTORY", settings = "SETTINGS"
     var id: String { rawValue }
 }
 

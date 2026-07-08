@@ -7,7 +7,13 @@ import Foundation
 // running app uses `APIConversationRepository`.
 
 protocol ConversationRepository {
+    /// Fetches just the session list (fast, one API call). Turns are empty;
+    /// call `fetchHistoryForSession` to populate them on-demand.
     func fetchConversations() async throws -> [Conversation]
+
+    /// Fetches the full turn history for one session. Call this when the user
+    /// clicks a conversation in the list to view its details.
+    func fetchHistoryForSession(sessionId: String) async throws -> [ConversationTurn]
 }
 
 // MARK: - Errors
@@ -54,6 +60,7 @@ final class APIConversationRepository: ConversationRepository {
         let id: String
         let startedAt: String
         let endedAt: String?
+        let voiceCount: Int
     }
 
     private struct SessionsResponseDTO: Decodable {
@@ -91,13 +98,58 @@ final class APIConversationRepository: ConversationRepository {
 
     func fetchConversations() async throws -> [Conversation] {
         let sessions = try await fetchSessions()
-        var conversations: [Conversation] = []
-        conversations.reserveCapacity(sessions.count)
-        for session in sessions {
-            let turns = try await fetchHistory(sessionId: session.id)
-            conversations.append(makeConversation(session, turns))
+        // Return sessions with empty turns — details are loaded on-demand by
+        // `fetchHistoryForSession` to avoid spiking the database on list load.
+        return sessions.map { session in
+            makeConversation(session, [])
         }
-        return conversations
+    }
+
+    /// Fetches the complete turn history for a single session. The list view
+    /// calls this on-demand when the user clicks a conversation to view details.
+    func fetchHistoryForSession(sessionId: String) async throws -> [ConversationTurn] {
+        let turnDTOs = try await fetchHistory(sessionId: sessionId)
+        let formatter = ISO8601DateFormatter()
+        // Convert DTOs to domain models. Since we don't have sessionId here,
+        // use the passed one for all messages in this session.
+        return turnDTOs.map { turn in
+            ConversationTurn(
+                turnId: turn.turnId,
+                user: turn.user.map { dto in
+                    VoiceMessage(
+                        id: dto.id,
+                        sessionId: sessionId,
+                        turnId: turn.turnId,
+                        sender: .user,
+                        content: dto.content,
+                        audioURL: dto.audioUrl.flatMap { URL(string: baseURL + $0) },
+                        timestamp: formatter.date(from: dto.createdAt) ?? Date()
+                    )
+                },
+                toolCalls: turn.toolCalls.map { call in
+                    ConversationToolCall(
+                        id: call.id,
+                        tool: call.tool,
+                        action: call.action,
+                        label: call.label,
+                        status: call.status,
+                        summary: call.summary,
+                        createdAt: formatter.date(from: call.createdAt) ?? Date()
+                    )
+                },
+                assistant: turn.assistant.map { dto in
+                    VoiceMessage(
+                        id: dto.id,
+                        sessionId: sessionId,
+                        turnId: turn.turnId,
+                        sender: .llm,
+                        content: dto.content,
+                        audioURL: dto.audioUrl.flatMap { URL(string: baseURL + $0) },
+                        timestamp: formatter.date(from: dto.createdAt) ?? Date()
+                    )
+                }
+            )
+        }
     }
 
     private func fetchSessions() async throws -> [SessionDTO] {
@@ -183,7 +235,7 @@ final class APIConversationRepository: ConversationRepository {
             )
         }
 
-        return Conversation(id: id, createdAt: startedAt, endedAt: endedAt, turns: turns)
+        return Conversation(id: id, createdAt: startedAt, endedAt: endedAt, voiceCount: session.voiceCount, turns: turns)
     }
 }
 
@@ -193,7 +245,7 @@ final class APIConversationRepository: ConversationRepository {
 
 final class MockConversationRepository: ConversationRepository {
 
-    func fetchConversations() async -> [Conversation] {
+    func fetchConversations() async throws -> [Conversation] {
         let cal = Calendar.current
         let now = Date()
 
@@ -202,40 +254,63 @@ final class MockConversationRepository: ConversationRepository {
         }
 
         return [
-            makeConversation(day: day(0), hour: 8, minute: 12, turnCount: 2, withToolCall: true),
-            makeConversation(title: "Standup recap", day: day(0), hour: 10, minute: 5, turnCount: 3),
-            makeConversation(day: day(0), hour: 14, minute: 33, turnCount: 1),
-            makeConversation(day: day(-1), hour: 17, minute: 47, turnCount: 2, withToolCall: true),
-            makeConversation(day: day(-1), hour: 21, minute: 2, turnCount: 2),
-            makeConversation(day: day(-2), hour: 11, minute: 3, turnCount: 2),
-            makeConversation(title: "Weekend planning", day: day(-3), hour: 9, minute: 20, turnCount: 3),
-            makeConversation(day: day(-4), hour: 15, minute: 41, turnCount: 2),
-            makeConversation(day: day(-5), hour: 13, minute: 12, turnCount: 2),
+            makeConversation(id: "mock-1", day: day(0), hour: 8, minute: 12, turnCount: 2, withToolCall: true, turnsToReturn: true),
+            makeConversation(id: "mock-2", title: "Standup recap", day: day(0), hour: 10, minute: 5, turnCount: 3),
+            makeConversation(id: "mock-3", day: day(0), hour: 14, minute: 33, turnCount: 1),
+            makeConversation(id: "mock-4", day: day(-1), hour: 17, minute: 47, turnCount: 2, withToolCall: true),
+            makeConversation(id: "mock-5", day: day(-1), hour: 21, minute: 2, turnCount: 2),
+            makeConversation(id: "mock-6", day: day(-2), hour: 11, minute: 3, turnCount: 2),
+            makeConversation(id: "mock-7", title: "Weekend planning", day: day(-3), hour: 9, minute: 20, turnCount: 3),
+            makeConversation(id: "mock-8", day: day(-4), hour: 15, minute: 41, turnCount: 2),
+            makeConversation(id: "mock-9", day: day(-5), hour: 13, minute: 12, turnCount: 2),
         ]
     }
 
+    func fetchHistoryForSession(sessionId: String) async throws -> [ConversationTurn] {
+        // Return mock turns for any session ID. In a real mock, you'd store
+        // data keyed by session and look it up here.
+        return makeTurns(count: 3, startTime: Date())
+    }
+
     private func makeConversation(
+        id: String? = nil,
         title: String? = nil,
         day: Date,
         hour: Int,
         minute: Int,
         turnCount: Int,
-        withToolCall: Bool = false
+        withToolCall: Bool = false,
+        turnsToReturn: Bool = false
     ) -> Conversation {
         let cal = Calendar.current
         let start = cal.date(bySettingHour: hour, minute: minute, second: 0, of: day) ?? day
         let end = cal.date(byAdding: .minute, value: turnCount * 2, to: start) ?? start
 
+        // List view shows empty turns; detail view fetches on-demand
+        let turns: [ConversationTurn] = turnsToReturn ? makeTurns(count: turnCount, startTime: start, withToolCall: withToolCall) : []
+
+        return Conversation(
+            id: UUID(uuidString: id ?? UUID().uuidString) ?? UUID(),
+            createdAt: start,
+            endedAt: end,
+            voiceCount: turnCount,
+            title: title,
+            turns: turns
+        )
+    }
+
+    private func makeTurns(count: Int, startTime: Date, withToolCall: Bool = false) -> [ConversationTurn] {
+        let cal = Calendar.current
         let sampleLines = [
             ("Hey, how's it going?", "Doing well, how can I help?"),
             ("Can you check my schedule for today?", "You have a standup at 9 and a design review at 2."),
             ("Thanks, remind me an hour before.", "Got it, I'll remind you at 1 PM."),
         ]
 
-        let turns: [ConversationTurn] = (0..<turnCount).map { i in
+        return (0..<count).map { i in
             let turnId = "turn-\(i + 1)"
-            let userTime = cal.date(byAdding: .minute, value: i * 2, to: start) ?? start
-            let assistantTime = cal.date(byAdding: .minute, value: i * 2 + 1, to: start) ?? start
+            let userTime = cal.date(byAdding: .minute, value: i * 2, to: startTime) ?? startTime
+            let assistantTime = cal.date(byAdding: .minute, value: i * 2 + 1, to: startTime) ?? startTime
             let (userLine, assistantLine) = sampleLines[i % sampleLines.count]
 
             let toolCalls: [ConversationToolCall] = (withToolCall && i == 0) ? [
@@ -267,7 +342,5 @@ final class MockConversationRepository: ConversationRepository {
                 )
             )
         }
-
-        return Conversation(createdAt: start, endedAt: end, title: title, turns: turns)
     }
 }

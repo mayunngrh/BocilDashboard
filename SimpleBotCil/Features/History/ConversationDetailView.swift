@@ -3,9 +3,17 @@ import SwiftUI
 /// Chat-room style detail for a single conversation. Renders each turn as a
 /// user bubble, any tool-call chips, then the assistant's reply bubble.
 /// Reached by tapping a row in `HistoryView`; `onBack` returns to the list.
+/// Loads the full turn history on appear (the list view shows sessions with
+/// empty turns for performance).
 struct ConversationDetailView: View {
     let conversation: Conversation
     let onBack: () -> Void
+
+    @State private var turns: [ConversationTurn] = []
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
+    private let repository: ConversationRepository = APIConversationRepository()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -13,7 +21,7 @@ struct ConversationDetailView: View {
 
             ScrollView {
                 VStack(spacing: 16) {
-                    ForEach(conversation.turns) { turn in
+                    ForEach(turns) { turn in
                         if let user = turn.user {
                             VoiceBubbleView(message: user)
                         }
@@ -33,6 +41,18 @@ struct ConversationDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .task { await loadTurns() }
+    }
+
+    private func loadTurns() async {
+        isLoading = true
+        errorMessage = nil
+        do {
+            turns = try await repository.fetchHistoryForSession(sessionId: conversation.id.uuidString)
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+        isLoading = false
     }
 
     // MARK: - Header

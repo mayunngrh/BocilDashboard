@@ -53,10 +53,16 @@ struct HomeView: View {
         HStack(alignment: .top, spacing: 48) {
             leftPanel
             rightPanel.frame(width: 380)
+            Spacer()
+            robotEye.frame(width: 200, height: 200)
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task { await loadHomeData() }
+    }
+
+    private var robotEye: some View {
+        RobotEyeView()
     }
 
     /// Loads everything the Home page shows from the backend: the profile

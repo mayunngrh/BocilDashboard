@@ -4,6 +4,7 @@ struct SettingsView: View {
     @EnvironmentObject private var appearanceManager: AppearanceManager
     @ObservedObject var connectionSettings: RobotConnectionSettings
     @StateObject private var memoryService = MemoryBackendService()
+    @StateObject private var configService = ConfigBackendService()
 
     @State private var personality: PersonalityMode = .calm
     @State private var language: LanguageMode       = .english
@@ -36,6 +37,16 @@ struct SettingsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { await memoryService.fetchMemories() }
+        .task { await loadConfig() }
+    }
+
+    /// Loads server config and reflects the saved personality in the UI.
+    private func loadConfig() async {
+        await configService.fetchConfig()
+        if let value = configService.config?.personality,
+           let mode = PersonalityMode(apiValue: value) {
+            personality = mode
+        }
     }
 
     private var personalityCard: some View {
@@ -46,7 +57,10 @@ struct SettingsView: View {
 
             VStack(spacing: 8) {
                 ForEach(PersonalityMode.allCases, id: \.self) { mode in
-                    Button(action: { personality = mode }) {
+                    Button(action: {
+                        personality = mode
+                        Task { await configService.updatePersonality(mode.apiValue) }
+                    }) {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(mode.rawValue)
                                 .font(Bocil.header(16))

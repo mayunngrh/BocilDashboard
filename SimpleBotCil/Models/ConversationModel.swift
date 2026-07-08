@@ -65,6 +65,7 @@ struct Conversation: Identifiable {
     let id: UUID
     let createdAt: Date        // session.startedAt
     let endedAt: Date?         // session.endedAt; nil while the session is still live
+    let voiceCount: Int        // number of voice turns in this session (from the backend)
     let turns: [ConversationTurn]
     /// User-assigned title. The API returns no name for a session, so this is
     /// `nil` until the user renames it via Edit mode. Renaming is local-only —
@@ -75,12 +76,14 @@ struct Conversation: Identifiable {
         id: UUID = UUID(),
         createdAt: Date,
         endedAt: Date? = nil,
+        voiceCount: Int = 0,
         title: String? = nil,
         turns: [ConversationTurn]
     ) {
         self.id = id
         self.createdAt = createdAt
         self.endedAt = endedAt
+        self.voiceCount = voiceCount
         self.title = title
         self.turns = turns
     }
@@ -94,9 +97,10 @@ struct Conversation: Identifiable {
         return "Voice chat · \(f.string(from: createdAt))"
     }
 
-    /// Number of voice messages (both sides of every turn) — shown on the list card.
+    /// Number of voice turns in this session — shown on the list card.
+    /// Uses voiceCount from the backend (even when turns are not yet loaded).
     var messageCount: Int {
-        turns.reduce(0) { $0 + ($1.user != nil ? 1 : 0) + ($1.assistant != nil ? 1 : 0) }
+        voiceCount
     }
 
     /// "1:15" session length (endedAt − createdAt), or "Live" while ongoing.
