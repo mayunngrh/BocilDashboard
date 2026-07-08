@@ -58,7 +58,7 @@ struct TopNavBar: View {
                     .frame(width: 30, height: 30)
                 Text("BOCIL")
                     .font(Bocil.header(14))
-                    .foregroundColor(Bocil.cardBorder)
+                    .foregroundColor(Bocil.accentSoft)
                     .fixedSize()
             }
             .padding(.leading, 20)
@@ -87,10 +87,10 @@ struct TopNavBar: View {
                 HStack(spacing: 6) {
                     HStack(spacing: 2) {
                         ZStack(alignment: .leading) {
-                            Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.2).frame(width: 16, height: 9)
-                            Rectangle().fill(Bocil.cardBorder).frame(width: 7, height: 5).padding(.leading, 1.5)
+                            Rectangle().stroke(Bocil.accentSoft, lineWidth: 1.2).frame(width: 16, height: 9)
+                            Rectangle().fill(Bocil.accentSoft).frame(width: 7, height: 5).padding(.leading, 1.5)
                         }
-                        Rectangle().fill(Bocil.cardBorder).frame(width: 2, height: 4)
+                        Rectangle().fill(Bocil.accentSoft).frame(width: 2, height: 4)
                     }
                     Text("50%").font(Bocil.mono(12)).foregroundColor(Bocil.subtext).fixedSize()
                 }
@@ -99,7 +99,7 @@ struct TopNavBar: View {
                 .overlay(Rectangle().stroke(Bocil.hairline, lineWidth: 1.5))
 
                 HStack(spacing: 6) {
-                    Circle().fill(Bocil.accentSoft).frame(width: 7, height: 7)
+                    Rectangle().fill(Bocil.accentSoft).frame(width: 7, height: 7)
                     Text("paired").font(Bocil.mono(12)).foregroundColor(Bocil.subtext).fixedSize()
                 }
                 .padding(.horizontal, 10)
@@ -135,3 +135,4 @@ struct PixelToggle: View {
         .animation(.easeInOut(duration: 0.15), value: isOn)
     }
 }
+

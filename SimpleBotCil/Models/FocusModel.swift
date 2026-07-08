@@ -9,31 +9,40 @@ enum FocusSession {
 
 final class FocusStore: ObservableObject {
     @Published var sessionActive = false
-    @Published var currentSeconds = 0       // elapsed in the live session
-    @Published var todayFocusSeconds = 0   // accumulated from completed sessions today
-    @Published var pendingAutoStart = false // Home sets this; FocusView consumes it
+    @Published var currentSeconds = 0
+    @Published var todayFocusSeconds = 0
+    @Published var pendingAutoStart = false
+    @Published var targetMinutes: Int? = nil  // nil = no time limit (count up)
 
-    // Total focus minutes for today (live session included)
     var totalTodayMinutes: Int {
         (todayFocusSeconds + (sessionActive ? currentSeconds : 0)) / 60
     }
 
-    func start() {
+    private var timer: Foundation.Timer?
+
+    func start(limitMinutes: Int? = nil) {
         currentSeconds = 0
+        targetMinutes = limitMinutes
         sessionActive = true
+        timer?.invalidate()
+        let t = Foundation.Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            guard let self, self.sessionActive else { return }
+            self.currentSeconds += 1
+            if let mins = self.targetMinutes, self.currentSeconds >= mins * 60 {
+                self.stop()
+            }
+        }
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
     }
 
     func stop() {
+        timer?.invalidate()
+        timer = nil
         if sessionActive { todayFocusSeconds += currentSeconds }
         sessionActive = false
         currentSeconds = 0
-    }
-
-    // Called every second by FocusView's timer
-    func tick(effectiveMinutes: Int?) {
-        guard sessionActive else { return }
-        currentSeconds += 1
-        if let mins = effectiveMinutes, currentSeconds >= mins * 60 { stop() }
+        targetMinutes = nil
     }
 }
 

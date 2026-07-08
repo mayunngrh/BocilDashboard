@@ -26,7 +26,7 @@ struct StateBocilPage: View {
 
     private let states: [RobotState] = [
         RobotState(emoji: "😊", label: "Happy",   command: "HAPPY",   color: .yellow),
-        RobotState(emoji: "😠", label: "Angry",   command: "ANGRY",   color: .red),
+        RobotState(emoji: "😠", label: "Angry",   command: "ANGRY",   color: Bocil.danger),
         RobotState(emoji: "😪", label: "Sleepy",  command: "SLEEPY",  color: .indigo),
         RobotState(emoji: "😴", label: "Asleep",  command: "ASLEEP",  color: .blue),
         RobotState(emoji: "🎉", label: "Playful", command: "PLAYFUL", color: .orange),
@@ -51,8 +51,8 @@ struct StateBocilPage: View {
 
             // Connection status + port picker
             HStack(spacing: 8) {
-                Circle()
-                    .fill(isConnected ? .green : .red)
+                Rectangle()
+                    .fill(isConnected ? .green : Bocil.danger)
                     .frame(width: 8, height: 8)
                 Text(isConnected ? "Connected: \(serial.selectedPort?.name ?? "")" : "No robot connected")
                     .font(.caption)

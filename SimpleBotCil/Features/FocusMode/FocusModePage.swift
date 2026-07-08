@@ -69,40 +69,40 @@ struct FocusModePage: View {
                 // MARK: Live status
                 VStack(spacing: 10) {
                     HStack(spacing: 8) {
-                        Circle()
+                        Rectangle()
                             .fill(posture.currentPosture == .sitting ? .orange : .green)
                             .frame(width: 8, height: 8)
                         Text(posture.currentPosture?.rawValue ?? (posture.isCalibrated ? "—" : "Calibrating…"))
                         Spacer()
                         Text(formatDuration(posture.currentDuration))
                             .font(.system(.body, design: .monospaced))
-                            .foregroundStyle(posture.currentPosture == .sitting && posture.currentDuration >= sittingLimit ? .red : .primary)
+                            .foregroundStyle(posture.currentPosture == .sitting && posture.currentDuration >= sittingLimit ? Bocil.danger : .primary)
                     }
 
                     ProgressView(value: min(posture.currentDuration, sittingLimit), total: sittingLimit)
-                        .tint(posture.currentDuration >= sittingLimit ? .red : .orange)
+                        .tint(posture.currentDuration >= sittingLimit ? Bocil.danger : .orange)
 
                     Divider()
 
                     HStack(spacing: 8) {
-                        Circle()
+                        Rectangle()
                             .fill(phoneDetector.isPhoneDetected ? .orange : .gray.opacity(0.4))
                             .frame(width: 8, height: 8)
                         Text(phoneDetector.isPhoneDetected ? "On phone" : "Not on phone")
                         Spacer()
                         Text(formatDuration(phoneDetector.currentDuration))
                             .font(.system(.body, design: .monospaced))
-                            .foregroundStyle(phoneDetector.currentDuration >= phoneLimit ? .red : .primary)
+                            .foregroundStyle(phoneDetector.currentDuration >= phoneLimit ? Bocil.danger : .primary)
                     }
 
                     ProgressView(value: min(phoneDetector.currentDuration, phoneLimit), total: phoneLimit)
-                        .tint(phoneDetector.currentDuration >= phoneLimit ? .red : .orange)
+                        .tint(phoneDetector.currentDuration >= phoneLimit ? Bocil.danger : .orange)
                 }
                 .frame(width: 420)
 
                 HStack(spacing: 8) {
-                    Circle()
-                        .fill(isRobotConnected ? .green : .red)
+                    Rectangle()
+                        .fill(isRobotConnected ? .green : Bocil.danger)
                         .frame(width: 8, height: 8)
                     Text(isRobotConnected
                          ? "Robot connected (USB): \(serial.selectedPort?.name ?? "")"
