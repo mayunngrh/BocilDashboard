@@ -21,7 +21,7 @@ struct ToolCallChipView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().stroke(borderColor, lineWidth: 1.5))
         .frame(maxWidth: 420, alignment: .leading)
     }

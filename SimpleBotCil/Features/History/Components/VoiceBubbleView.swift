@@ -40,7 +40,7 @@ struct VoiceBubbleView: View {
 
                 WaveformView(
                     bars: WaveformView.mockBars(seed: message.id.hashValue),
-                    color: isUser ? Bocil.ink.opacity(0.55) : Bocil.cardBorder,
+                    color: isUser ? Bocil.onAccent.opacity(0.55) : Bocil.cardBorder,
                     height: 22
                 )
 
@@ -50,19 +50,19 @@ struct VoiceBubbleView: View {
                 } else if let duration = audioPlayer.duration {
                     Text(formatDuration(duration))
                         .font(Bocil.mono(12))
-                        .foregroundColor(isUser ? Bocil.ink : Bocil.subtext)
+                        .foregroundColor(isUser ? Bocil.onAccent : Bocil.subtext)
                 }
             }
 
             if !message.content.isEmpty {
                 Text(message.content)
                     .font(Bocil.mono(13))
-                    .foregroundColor(isUser ? Bocil.ink : Bocil.ink)
+                    .foregroundColor(isUser ? Bocil.onAccent : Bocil.ink)
             } else if message.audioURL != nil {
                 Text("Transcription unavailable")
                     .font(Bocil.mono(11))
                     .italic()
-                    .foregroundColor(isUser ? Bocil.ink.opacity(0.6) : Bocil.subtext)
+                    .foregroundColor(isUser ? Bocil.onAccent.opacity(0.6) : Bocil.subtext)
             }
         }
         .padding(.horizontal, 14)
@@ -77,7 +77,7 @@ struct VoiceBubbleView: View {
             Button(action: { audioPlayer.toggle(url: audioURL) }) {
                 Text(audioPlayer.isPlaying ? "❚❚" : "▶")
                     .font(.system(size: 11))
-                    .foregroundColor(isUser ? Bocil.ink : Bocil.accent)
+                    .foregroundColor(isUser ? Bocil.onAccent : Bocil.accent)
                     .frame(width: 30, height: 30)
                     .background(isUser ? Color.white.opacity(0.6) : Bocil.bg)
                     .overlay(Rectangle().stroke(borderColor, lineWidth: 1.5))
