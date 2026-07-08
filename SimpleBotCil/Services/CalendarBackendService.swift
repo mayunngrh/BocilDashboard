@@ -61,6 +61,47 @@ final class CalendarBackendService: ObservableObject {
         }
     }
 
+    /// Applies a reschedule to the local `events` array immediately (so a drag
+    /// feels instant) and returns the pre-change snapshot for rollback. Call
+    /// this synchronously on the main actor, then `persistTimeChange` to save.
+    @discardableResult
+    func applyLocalTimeChange(id: String, startsAt: Date, endsAt: Date) -> [BackendCalendarEvent] {
+        let previous = events
+        if let idx = events.firstIndex(where: { $0.id == id }) {
+            let e = events[idx]
+            events[idx] = BackendCalendarEvent(
+                id: e.id, title: e.title, startsAt: startsAt, endsAt: endsAt,
+                location: e.location, isImportant: e.isImportant, notes: e.notes
+            )
+        }
+        return previous
+    }
+
+    /// Persists a reschedule via `PATCH /api/v1/calendar/events/{id}` (only the
+    /// times change; title/location/etc. stay as-is). On failure, rolls the
+    /// local `events` array back to `previous` and surfaces the error.
+    func persistTimeChange(id: String, startsAt: Date, endsAt: Date, previous: [BackendCalendarEvent]) async {
+        do {
+            let iso = ISO8601DateFormatter()
+            let url = URL(string: "\(baseURL)/api/v1/calendar/events/\(id)")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "PATCH"
+            request.setValue("Bearer \(deviceToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 10
+            request.httpBody = try JSONSerialization.data(withJSONObject: [
+                "startsAt": iso.string(from: startsAt),
+                "endsAt": iso.string(from: endsAt),
+            ])
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            try Self.checkOKStatus(response, data: data)
+        } catch {
+            self.events = previous
+            self.error = error.localizedDescription
+        }
+    }
+
     private static func checkOKStatus(_ response: URLResponse, data: Data) throws {
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             let body = String(data: data, encoding: .utf8) ?? "unknown error"
