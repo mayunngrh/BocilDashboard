@@ -27,7 +27,7 @@ struct FloatingTimerContent: View {
                     MenuBarTimer.shared.stop()
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.red)
+                .tint(Bocil.danger)
             }
         }
         .padding(20)

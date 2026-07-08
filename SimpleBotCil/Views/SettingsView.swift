@@ -115,7 +115,7 @@ struct SettingsView: View {
                     .font(Bocil.mono(14))
                     .foregroundColor(Bocil.ink)
                 Spacer()
-                Circle().fill(Bocil.accentSoft).frame(width: 8, height: 8)
+                Rectangle().fill(Bocil.accentSoft).frame(width: 8, height: 8)
             }
         }
         .padding(24)

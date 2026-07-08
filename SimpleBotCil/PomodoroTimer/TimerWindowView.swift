@@ -29,7 +29,7 @@ struct TimerWindowView: View {
                     isPresented = false
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.red)
+                .tint(Bocil.danger)
 
                 Button("Dismiss") {
                     isPresented = false

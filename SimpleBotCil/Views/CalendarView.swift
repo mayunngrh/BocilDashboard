@@ -166,14 +166,14 @@ struct CalendarView: View {
                     if backendService.isLoading {
                         ProgressView().scaleEffect(0.6)
                     } else if backendService.error == nil {
-                        Circle().fill(Color.green).frame(width: 7, height: 7)
+                        Rectangle().fill(Color.green).frame(width: 7, height: 7)
                     }
                 }
 
                 if let error = backendService.error {
                     Text(error)
                         .font(Bocil.mono(10))
-                        .foregroundColor(.red)
+                        .foregroundColor(Bocil.danger)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     Text("\(backendService.events.count) events loaded")
@@ -217,7 +217,7 @@ struct CalendarView: View {
                         isToday    ? Bocil.ink        :
                         isSelected ? Bocil.accentSoft : Color.clear
                     )
-                Circle()
+                Rectangle()
                     .fill(hasDot ? (isToday ? Bocil.surface.opacity(0.9) : Bocil.subtext) : Color.clear)
                     .frame(width: 4, height: 4)
             }
@@ -310,11 +310,11 @@ struct CalendarView: View {
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.red)
+                            .background(Bocil.danger)
                             .cornerRadius(3)
 
                         Rectangle()
-                            .fill(Color.red)
+                            .fill(Bocil.danger)
                             .frame(height: 2)
                     }
                     .padding(.leading, 8)
@@ -431,7 +431,7 @@ struct CalendarView: View {
             .frame(width: 40)
 
             Rectangle()
-                .fill(event.isImportant ? Color.red : Bocil.accent)
+                .fill(event.isImportant ? Bocil.danger : Bocil.accent)
                 .frame(width: 3)
 
             VStack(alignment: .leading, spacing: 2) {

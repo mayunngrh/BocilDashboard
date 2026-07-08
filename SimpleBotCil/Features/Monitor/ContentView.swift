@@ -122,7 +122,7 @@ struct ContentView: View {
 
             // MARK: Phone detection
             HStack(spacing: 8) {
-                Circle()
+                Rectangle()
                     .fill(phoneDetector.isPhoneDetected ? .orange : .gray.opacity(0.4))
                     .frame(width: 8, height: 8)
                 if phoneDetector.isPhoneDetected {
@@ -166,8 +166,8 @@ struct ContentView: View {
 
             // MARK: Serial port row
             HStack(spacing: 8) {
-                Circle()
-                    .fill(isConnected ? .green : .red)
+                Rectangle()
+                    .fill(isConnected ? .green : Bocil.danger)
                     .frame(width: 8, height: 8)
                 Text(connectionLabel)
                     .font(.caption)
@@ -245,7 +245,7 @@ private struct PomodoroView: View {
                     MenuBarTimer.shared.stop()
                 }
                 .buttonStyle(.bordered)
-                .foregroundStyle(.red)
+                .foregroundStyle(Bocil.danger)
             }
         }
     }
