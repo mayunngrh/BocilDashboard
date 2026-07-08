@@ -17,21 +17,34 @@ struct SettingsView: View {
 
     private let remindOptions = [5, 10, 15, 30]
 
+    // Three content-sized columns instead of a fixed grid — each card sizes to
+    // its own content rather than stretching to match a row, so the page's
+    // total height is the tallest column's actual content, not an arbitrary
+    // row count. That's what keeps everything on one screen without a
+    // leftover empty cell (the old 2-column grid had 5 cards in 3 rows, with
+    // an empty cell wasting space in the last row and pushing Appearance below
+    // the fold). Still wrapped in a ScrollView as a safety net for very short
+    // windows or an unusually long memory list, but it shouldn't engage at
+    // the app's normal minimum size.
     var body: some View {
         ScrollView {
-            Grid(alignment: .topLeading, horizontalSpacing: 24, verticalSpacing: 20) {
-                GridRow(alignment: .top) {
+            HStack(alignment: .top, spacing: 24) {
+                VStack(spacing: 20) {
                     personalityCard
-                    notificationsCard
-                }
-                GridRow(alignment: .top) {
                     connectionCard
+                }
+                .frame(maxWidth: .infinity)
+
+                VStack(spacing: 20) {
+                    notificationsCard
                     privacyCard
                 }
-                GridRow(alignment: .top) {
+                .frame(maxWidth: .infinity)
+
+                VStack(spacing: 20) {
                     appearanceCard
-                    Color.clear
                 }
+                .frame(maxWidth: .infinity)
             }
             .padding(32)
         }
@@ -80,7 +93,7 @@ struct SettingsView: View {
             }
         }
         .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
         .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
@@ -136,7 +149,7 @@ struct SettingsView: View {
             }
         }
         .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
         .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
@@ -173,7 +186,7 @@ struct SettingsView: View {
             }
         }
         .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
         .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
@@ -198,7 +211,7 @@ struct SettingsView: View {
             memorySection
         }
         .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
         .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
@@ -247,7 +260,7 @@ struct SettingsView: View {
                         }
                     }
                 }
-                .frame(maxHeight: 220)
+                .frame(maxHeight: 160)
             }
 
             Button(action: { Task { await memoryService.clearAll() } }) {
@@ -346,7 +359,7 @@ struct SettingsView: View {
             }
         }
         .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
         .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
