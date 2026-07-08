@@ -9,6 +9,8 @@ import SwiftUI
 struct RobotEyeView: View {
     @State private var gazeOffset: CGSize = .zero
     @State private var isBlinking = false
+    @State private var isHappy = false
+    @State private var giggle: CGFloat = 0   // 0 = rest, 1 = bobbed up (drives the giggle bounce)
 
     // Native Robot.png pixel size, used to reproduce scaledToFit's letterboxing.
     private let imageSize = CGSize(width: 896, height: 1185)
@@ -55,6 +57,47 @@ struct RobotEyeView: View {
             }
         }
         .task { await runBlinkLoop() }
+        .task { await runMoodLoop() }
+    }
+
+    /// Every so often, the eyes curve into a happy "⌒ ⌒" arch and do a few
+    /// quick bobs — a little giggle — then relax back to normal. Deliberately
+    /// infrequent so it feels like a spontaneous moment, not a constant mood.
+    /// The whole giggle lasts roughly 1–2 seconds.
+    private func runMoodLoop() async {
+        while !Task.isCancelled {
+            let wait = Double.random(in: 9.0...18.0)
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+
+            // Clap into the smile (squash-blink hides the instant shape swap).
+            await clapInto(happy: true)
+            guard !Task.isCancelled else { return }
+
+            // Giggle: a handful of quick up/down bobs (~0.2s each).
+            let bounces = Int.random(in: 4...7)
+            for _ in 0..<bounces {
+                withAnimation(.easeOut(duration: 0.09)) { giggle = 1 }
+                try? await Task.sleep(nanoseconds: 90_000_000)
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeIn(duration: 0.11)) { giggle = 0 }
+                try? await Task.sleep(nanoseconds: 110_000_000)
+                guard !Task.isCancelled else { return }
+            }
+
+            // Clap back to normal eyes.
+            await clapInto(happy: false)
+        }
+    }
+
+    /// Snaps the eyes to `happy` behind a quick squash-blink, so the shape
+    /// change reads as a crisp "clap" rather than a fade.
+    private func clapInto(happy: Bool) async {
+        withAnimation(.easeIn(duration: 0.06)) { isBlinking = true }
+        try? await Task.sleep(nanoseconds: 80_000_000)
+        guard !Task.isCancelled else { return }
+        isHappy = happy   // instant swap while squashed shut — no fade is visible
+        withAnimation(.easeOut(duration: 0.1)) { isBlinking = false }
     }
 
     /// Blinks at a random interval (3–6s) forever, for as long as this view
@@ -90,17 +133,27 @@ struct RobotEyeView: View {
             glowingEye(width: width, height: height)
             glowingEye(width: width, height: height)
         }
-        .offset(gazeOffset)
+        // Gaze drift plus the giggle bob (a quick upward hop while laughing).
+        .offset(x: gazeOffset.width, y: gazeOffset.height - giggle * height * 0.16)
         .animation(.easeOut(duration: 0.12), value: gazeOffset)
     }
 
     private func glowingEye(width: CGFloat, height: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: width * 0.35, style: .continuous)
-            .fill(eyeColor)
-            .frame(width: width, height: height)
-            .scaleEffect(x: 1, y: isBlinking ? 0.08 : 1, anchor: .center)
-            .shadow(color: eyeColor.opacity(0.9), radius: width * 0.5)
-            .shadow(color: eyeColor.opacity(0.6), radius: width * 1.1)
+        // Instant swap between shapes (no cross-fade) — the change is hidden
+        // behind the squash-blink in `clapInto`, so it "claps" open into the
+        // new expression.
+        Group {
+            if isHappy {
+                HappyEyeShape().fill(eyeColor)
+            } else {
+                RoundedRectangle(cornerRadius: width * 0.35, style: .continuous).fill(eyeColor)
+            }
+        }
+        .frame(width: width, height: height)
+        .scaleEffect(isHappy ? 1.2 : 1, anchor: .center)          // happy eyes are a bit bigger
+        .scaleEffect(x: 1, y: isBlinking ? 0.08 : 1, anchor: .center)
+        .shadow(color: eyeColor.opacity(0.9), radius: width * 0.5)
+        .shadow(color: eyeColor.opacity(0.6), radius: width * 1.1)
     }
 
     /// The rect the image actually occupies inside `containerSize` after
@@ -135,6 +188,31 @@ struct RobotEyeView: View {
         withAnimation {
             gazeOffset = CGSize(width: magnitude * cos(angle), height: magnitude * sin(angle))
         }
+    }
+}
+
+/// A happy, upward-curving crescent eye ("⌒") — a band that bulges up in the
+/// middle and tapers to points at the sides, so two of them read as a content
+/// smile. Fills its frame, so it drops into the same slot as the normal eye.
+private struct HappyEyeShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let h = rect.height
+        let tipY = rect.minY + h * 0.72          // side tips sit lower → taller arch
+        let outerPeakY = rect.minY - h * 0.32    // upper arc peaks well above the top → more curve
+        let innerPeakY = rect.minY + h * 0.16    // lower arc peak → keeps a nice band thickness
+
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: tipY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: tipY),
+            control: CGPoint(x: rect.midX, y: outerPeakY)
+        )
+        path.addQuadCurve(
+            to: CGPoint(x: rect.minX, y: tipY),
+            control: CGPoint(x: rect.midX, y: innerPeakY)
+        )
+        path.closeSubpath()
+        return path
     }
 }
 
