@@ -22,6 +22,13 @@ private func daysInGrid(for month: Date) -> [CalendarDay] {
 
 private let weekLabels = ["M", "T", "W", "T", "F", "S", "S"]
 
+/// The three schedule modes, like macOS Calendar's Day/Week/Month switcher.
+enum CalendarDisplayMode: String, CaseIterable {
+    case today = "Today"
+    case week  = "Week"
+    case month = "Month"
+}
+
 // MARK: - CalendarView
 
 struct CalendarView: View {
@@ -31,6 +38,7 @@ struct CalendarView: View {
 
     @State private var displayedMonth = Date()
     @State private var selectedDate   = Date()
+    @State private var displayMode: CalendarDisplayMode = .today
     @State private var showAddEvent   = false
     @State private var showAddTask    = false
     @State private var draft          = NewEventDraft()
@@ -84,21 +92,31 @@ struct CalendarView: View {
         }
         .onAppear {
             Task {
-                let calendar = Calendar.current
-                let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: displayedMonth))!
-                let endOfMonth = calendar.date(byAdding: .month, value: 1, to: startOfMonth)!
-                await backendService.fetchEvents(from: startOfMonth, to: endOfMonth)
+                await refreshEvents()
                 await tasksService.fetchTasks()
             }
         }
-        .onChange(of: displayedMonth) { _, newMonth in
-            Task {
-                let calendar = Calendar.current
-                let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: newMonth))!
-                let endOfMonth = calendar.date(byAdding: .month, value: 1, to: startOfMonth)!
-                await backendService.fetchEvents(from: startOfMonth, to: endOfMonth)
+        .onChange(of: displayedMonth) { _, _ in
+            Task { await refreshEvents() }
+        }
+        // Week-mode arrows can walk `selectedDate` across a month boundary;
+        // keep `displayedMonth` (mini calendar + fetch window) following it.
+        .onChange(of: selectedDate) { _, newDate in
+            if !Calendar.current.isDate(newDate, equalTo: displayedMonth, toGranularity: .month) {
+                displayedMonth = newDate
             }
         }
+    }
+
+    /// Fetches the displayed month padded by a week on both sides, so a week
+    /// view that spills into the adjacent month always has its events loaded.
+    private func refreshEvents() async {
+        let calendar = Calendar.current
+        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: displayedMonth))!
+        let endOfMonth = calendar.date(byAdding: .month, value: 1, to: startOfMonth)!
+        let from = calendar.date(byAdding: .day, value: -7, to: startOfMonth)!
+        let to = calendar.date(byAdding: .day, value: 7, to: endOfMonth)!
+        await backendService.fetchEvents(from: from, to: to)
     }
 
     // MARK: - Left column
@@ -247,12 +265,19 @@ struct CalendarView: View {
 
     private var centerColumn: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
-            HStack {
-                Text(scheduleDateTitle)
+            // Header: title · mode switcher · period nav · add event
+            HStack(spacing: 12) {
+                Text(headerTitle)
                     .font(Bocil.header(16))
                     .foregroundColor(Bocil.ink)
-                Spacer()
+                    .lineLimit(1)
+
+                Spacer(minLength: 8)
+
+                modeSwitcher
+
+                periodNav
+
                 Button(action: { draft = NewEventDraft(); showAddEvent = true }) {
                     HStack(spacing: 5) {
                         Text("+").font(Bocil.header(13)).foregroundColor(Bocil.ink)
@@ -270,14 +295,101 @@ struct CalendarView: View {
 
             Rectangle().fill(Bocil.hairline).frame(height: 1)
 
-            // Timeline view
-            timelineView
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Bocil.surface)
+            // Mode content
+            Group {
+                switch displayMode {
+                case .today: timelineView
+                case .week:  weekView
+                case .month: monthGridView
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Bocil.surface)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+    }
+
+    /// macOS Calendar-style segmented switcher: Today / Week / Month.
+    private var modeSwitcher: some View {
+        HStack(spacing: 0) {
+            ForEach(CalendarDisplayMode.allCases, id: \.self) { mode in
+                Button(action: { displayMode = mode }) {
+                    Text(mode.rawValue)
+                        .font(Bocil.mono(12))
+                        .foregroundColor(displayMode == mode ? Bocil.onAccent : Bocil.subtext)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(displayMode == mode ? Bocil.accentSoft : Bocil.surface)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+    }
+
+    /// ‹ Today › — steps by day/week/month depending on the current mode;
+    /// the middle button jumps back to now.
+    private var periodNav: some View {
+        HStack(spacing: 0) {
+            Button(action: { shiftPeriod(-1) }) {
+                Image("ChevronLeftPixel")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 10, height: 10)
+                    .foregroundColor(Bocil.ink)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+
+            Button(action: { goToToday() }) {
+                Text("Today")
+                    .font(Bocil.mono(12))
+                    .foregroundColor(Bocil.ink)
+                    .padding(.horizontal, 10)
+                    .frame(height: 28)
+            }
+            .buttonStyle(.plain)
+
+            Button(action: { shiftPeriod(1) }) {
+                Image("ChevronRightPixel")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 10, height: 10)
+                    .foregroundColor(Bocil.ink)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+        }
+        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+    }
+
+    private var headerTitle: String {
+        switch displayMode {
+        case .today: return scheduleDateTitle
+        case .week:  return weekTitle
+        case .month: return monthTitle
+        }
+    }
+
+    private func shiftPeriod(_ delta: Int) {
+        let cal = Calendar.current
+        switch displayMode {
+        case .today:
+            if let d = cal.date(byAdding: .day, value: delta, to: selectedDate) { selectedDate = d }
+        case .week:
+            if let d = cal.date(byAdding: .day, value: 7 * delta, to: selectedDate) { selectedDate = d }
+        case .month:
+            shiftMonth(delta)
+        }
+    }
+
+    private func goToToday() {
+        selectedDate = Date()
+        displayedMonth = Date()
     }
 
     private static let hourHeight: CGFloat = 60
@@ -369,27 +481,284 @@ struct CalendarView: View {
                             )
                     }
 
-                    // "Now" indicator line (red)
-                    HStack(spacing: 0) {
-                        Text(String(format: "%02d:%02d", nowHour, nowMin))
-                            .font(Bocil.mono(10))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Bocil.danger)
+                    // "Now" indicator line (red) — only when actually viewing today
+                    if Calendar.current.isDateInToday(selectedDate) {
+                        HStack(spacing: 0) {
+                            Text(String(format: "%02d:%02d", nowHour, nowMin))
+                                .font(Bocil.mono(10))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Bocil.danger)
 
-                        Rectangle()
-                            .fill(Bocil.danger)
-                            .frame(height: 2)
+                            Rectangle()
+                                .fill(Bocil.danger)
+                                .frame(height: 2)
+                        }
+                        .padding(.leading, 8)
+                        .offset(y: nowOffsetY - 12)
                     }
-                    .padding(.leading, 8)
-                    .offset(y: nowOffsetY - 12)
                 }
             }
             .frame(maxHeight: .infinity)
             .onAppear {
                 scrollProxy.scrollTo("hour_\(max(0, nowHour - 2))", anchor: .top)
             }
+        }
+    }
+
+    // MARK: - Week view
+    //
+    // macOS Calendar-style week: a pinned day-header row, a shared hour gutter,
+    // and seven columns of absolutely-positioned event chips (reusing the same
+    // greedy column-packing layout as the day timeline, per column). Tapping a
+    // chip opens the detail popup; tapping a day header jumps to that day's
+    // Today view. The red "now" line spans only today's column.
+
+    /// The 7 days (Mon–Sun, matching the mini calendar) of selectedDate's week.
+    private var weekDays: [Date] {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone.current
+        cal.firstWeekday = 2
+        let start = cal.dateInterval(of: .weekOfYear, for: selectedDate)?.start ?? selectedDate
+        return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: start) }
+    }
+
+    private var weekTitle: String {
+        guard let first = weekDays.first, let last = weekDays.last else { return "" }
+        let cal = Calendar.current
+        let f1 = DateFormatter(); f1.dateFormat = "MMM d"
+        let f2 = DateFormatter()
+        f2.dateFormat = cal.isDate(first, equalTo: last, toGranularity: .month) ? "d, yyyy" : "MMM d, yyyy"
+        return "\(f1.string(from: first)) – \(f2.string(from: last))".uppercased()
+    }
+
+    private static func weekdayShortLabel(_ date: Date) -> String {
+        let f = DateFormatter(); f.dateFormat = "EEE"
+        return f.string(from: date).uppercased()
+    }
+
+    private var weekView: some View {
+        GeometryReader { geo in
+            let gutter: CGFloat = 56
+            let colWidth = max((geo.size.width - gutter) / 7, 40)
+            let days = weekDays
+            let cal = Calendar.current
+            let hourHeight = Self.hourHeight
+            let now = Date()
+            let nowOffsetY = CGFloat(cal.component(.hour, from: now)) * hourHeight
+                + CGFloat(cal.component(.minute, from: now)) / 60 * hourHeight
+
+            VStack(spacing: 0) {
+                // Pinned day headers
+                HStack(spacing: 0) {
+                    Color.clear.frame(width: gutter, height: 42)
+                    ForEach(days, id: \.self) { day in
+                        let isToday = cal.isDateInToday(day)
+                        Button(action: { selectedDate = day; displayMode = .today }) {
+                            VStack(spacing: 1) {
+                                Text(Self.weekdayShortLabel(day))
+                                    .font(Bocil.mono(9))
+                                    .foregroundColor(isToday ? Bocil.onAccent : Bocil.subtext)
+                                Text("\(cal.component(.day, from: day))")
+                                    .font(Bocil.header(13))
+                                    .foregroundColor(isToday ? Bocil.onAccent : Bocil.ink)
+                            }
+                            .frame(width: colWidth, height: 42)
+                            .background(isToday ? Bocil.accentSoft : Bocil.surface)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Rectangle().fill(Bocil.hairline).frame(height: 1)
+
+                ScrollViewReader { scrollProxy in
+                    ScrollView {
+                        ZStack(alignment: .topLeading) {
+                            // Hour rows with gutter labels
+                            VStack(spacing: 0) {
+                                ForEach(0..<24, id: \.self) { hour in
+                                    ZStack(alignment: .topLeading) {
+                                        Rectangle()
+                                            .fill(Bocil.surface)
+                                            .border(Bocil.hairline, width: 0.5)
+                                        Text(String(format: "%02d:00", hour))
+                                            .font(Bocil.mono(10))
+                                            .foregroundColor(Bocil.subtext)
+                                            .padding(.leading, 6)
+                                            .padding(.top, 3)
+                                    }
+                                    .frame(height: hourHeight)
+                                    .id("wk_hour_\(hour)")
+                                }
+                            }
+
+                            // Vertical day separators
+                            ForEach(0...7, id: \.self) { i in
+                                Rectangle()
+                                    .fill(Bocil.hairline)
+                                    .frame(width: 1, height: hourHeight * 24)
+                                    .offset(x: gutter + CGFloat(i) * colWidth)
+                            }
+
+                            // Events, day by day (same packing as the day view,
+                            // scaled to one column's width)
+                            ForEach(Array(days.enumerated()), id: \.offset) { dayIdx, day in
+                                let dayEvents = backendService.events
+                                    .filter { cal.isDate($0.startsAt, inSameDayAs: day) }
+                                    .sorted { $0.startsAt < $1.startsAt }
+                                let placements = Self.layoutPlacements(
+                                    for: dayEvents, hourHeight: hourHeight,
+                                    availableWidth: max(colWidth - 6, 30)
+                                )
+                                ForEach(placements) { placed in
+                                    timelineEventBlock(placed.event, height: placed.height)
+                                        .frame(width: placed.width, height: placed.height, alignment: .topLeading)
+                                        .clipped()
+                                        .contentShape(Rectangle())
+                                        .onTapGesture { selectedEvent = placed.event }
+                                        .offset(
+                                            x: gutter + CGFloat(dayIdx) * colWidth + 3 + placed.xOffset,
+                                            y: placed.yOffset
+                                        )
+                                }
+                            }
+
+                            // "Now" line, only across today's column
+                            if let todayIdx = days.firstIndex(where: { cal.isDateInToday($0) }) {
+                                Rectangle()
+                                    .fill(Bocil.danger)
+                                    .frame(width: colWidth, height: 2)
+                                    .offset(x: gutter + CGFloat(todayIdx) * colWidth, y: nowOffsetY - 1)
+                            }
+                        }
+                    }
+                    .onAppear {
+                        scrollProxy.scrollTo("wk_hour_\(max(0, cal.component(.hour, from: now) - 2))", anchor: .top)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Month view
+    //
+    // macOS Calendar-style month grid: weekday header, then one row per week.
+    // Each cell shows the day number (today highlighted) and as many event
+    // rows as fit, with "+N more" for overflow. Tapping an event opens its
+    // detail popup; tapping anywhere else in a cell jumps to that day's
+    // Today view.
+
+    /// All grid dates for displayedMonth: starts on the Monday on/before the
+    /// 1st and runs whole weeks until the month is covered (5 or 6 rows).
+    private var monthGridDates: [Date] {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone.current
+        cal.firstWeekday = 2
+        let comps = cal.dateComponents([.year, .month], from: displayedMonth)
+        guard let firstOfMonth = cal.date(from: comps),
+              let gridStart = cal.dateInterval(of: .weekOfYear, for: firstOfMonth)?.start,
+              let dayRange = cal.range(of: .day, in: .month, for: firstOfMonth)
+        else { return [] }
+
+        let leading = cal.dateComponents([.day], from: gridStart, to: firstOfMonth).day ?? 0
+        let weeks = Int(ceil(Double(leading + dayRange.count) / 7.0))
+        return (0..<(weeks * 7)).compactMap { cal.date(byAdding: .day, value: $0, to: gridStart) }
+    }
+
+    private var monthGridView: some View {
+        GeometryReader { geo in
+            let dates = monthGridDates
+            let weeks = max(dates.count / 7, 1)
+            let headerH: CGFloat = 26
+            let cellW = geo.size.width / 7
+            let cellH = (geo.size.height - headerH) / CGFloat(weeks)
+
+            VStack(spacing: 0) {
+                // Weekday header
+                HStack(spacing: 0) {
+                    ForEach(Array(["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"].enumerated()), id: \.offset) { _, label in
+                        Text(label)
+                            .font(Bocil.mono(10))
+                            .foregroundColor(Bocil.subtext)
+                            .frame(width: cellW, height: headerH)
+                    }
+                }
+                .background(Bocil.surface)
+
+                ForEach(0..<weeks, id: \.self) { w in
+                    HStack(spacing: 0) {
+                        ForEach(0..<7, id: \.self) { d in
+                            monthDayCell(dates[w * 7 + d], width: cellW, height: cellH)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func monthDayCell(_ date: Date, width: CGFloat, height: CGFloat) -> some View {
+        let cal = Calendar.current
+        let isCurrentMonth = cal.isDate(date, equalTo: displayedMonth, toGranularity: .month)
+        let isToday = cal.isDateInToday(date)
+        let events = backendService.events
+            .filter { cal.isDate($0.startsAt, inSameDayAs: date) }
+            .sorted { $0.startsAt < $1.startsAt }
+
+        // Day-number row is ~24pt; each event row ~15pt; keep one line for "+N more".
+        let rowH: CGFloat = 15
+        let maxRows = max(Int((height - 28) / rowH), 0)
+        let visible = events.count <= maxRows ? events : Array(events.prefix(max(maxRows - 1, 0)))
+        let overflow = events.count - visible.count
+
+        VStack(alignment: .leading, spacing: 1) {
+            HStack {
+                Spacer()
+                Text("\(cal.component(.day, from: date))")
+                    .font(Bocil.mono(11))
+                    .foregroundColor(isToday ? Bocil.onAccent : (isCurrentMonth ? Bocil.ink : Bocil.faint))
+                    .frame(width: 20, height: 20)
+                    .background(isToday ? Bocil.accentSoft : Color.clear)
+            }
+
+            ForEach(Array(visible.enumerated()), id: \.offset) { _, event in
+                HStack(spacing: 3) {
+                    Rectangle()
+                        .fill(event.isImportant ? Bocil.danger : Bocil.accentSoft)
+                        .frame(width: 2, height: 10)
+                    Text(event.title)
+                        .font(Bocil.mono(9))
+                        .foregroundColor(isCurrentMonth ? Bocil.ink : Bocil.faint)
+                        .lineLimit(1)
+                    Spacer(minLength: 2)
+                    Text(Self.hourMinute(event.startsAt))
+                        .font(Bocil.mono(8))
+                        .foregroundColor(Bocil.subtext)
+                }
+                .frame(height: rowH - 2)
+                .contentShape(Rectangle())
+                .onTapGesture { selectedEvent = event }
+            }
+
+            if overflow > 0 {
+                Text("+\(overflow) more")
+                    .font(Bocil.mono(8))
+                    .foregroundColor(Bocil.faint)
+                    .padding(.leading, 5)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(4)
+        .frame(width: width, height: height, alignment: .topLeading)
+        .background(isCurrentMonth ? Bocil.surface : Bocil.bg.opacity(0.6))
+        .overlay(Rectangle().stroke(Bocil.hairline, lineWidth: 0.5))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            selectedDate = date
+            displayMode = .today
         }
     }
 
