@@ -85,20 +85,6 @@ struct TopNavBar: View {
 
             HStack(spacing: 8) {
                 HStack(spacing: 6) {
-                    HStack(spacing: 2) {
-                        ZStack(alignment: .leading) {
-                            Rectangle().stroke(Bocil.accentSoft, lineWidth: 1.2).frame(width: 16, height: 9)
-                            Rectangle().fill(Bocil.accentSoft).frame(width: 7, height: 5).padding(.leading, 1.5)
-                        }
-                        Rectangle().fill(Bocil.accentSoft).frame(width: 2, height: 4)
-                    }
-                    Text("50%").font(Bocil.mono(12)).foregroundColor(Bocil.subtext).fixedSize()
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .overlay(Rectangle().stroke(Bocil.hairline, lineWidth: 1.5))
-
-                HStack(spacing: 6) {
                     Rectangle().fill(Bocil.accentSoft).frame(width: 7, height: 7)
                     Text("paired").font(Bocil.mono(12)).foregroundColor(Bocil.subtext).fixedSize()
                 }

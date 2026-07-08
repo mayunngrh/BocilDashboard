@@ -266,17 +266,17 @@ struct CalendarView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(Color.white)
+            .background(Bocil.surface)
 
             Rectangle().fill(Bocil.hairline).frame(height: 1)
 
             // Timeline view
             timelineView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.white)
+                .background(Bocil.surface)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
 
@@ -303,7 +303,7 @@ struct CalendarView: View {
                         ForEach(hours, id: \.self) { hour in
                             ZStack(alignment: .topLeading) {
                                 Rectangle()
-                                    .fill(Color.white)
+                                    .fill(Bocil.surface)
                                     .border(Bocil.hairline, width: 1)
 
                                 Text(String(format: "%02d:00", hour))
@@ -540,7 +540,7 @@ struct CalendarView: View {
         let newStart = event.startsAt.addingTimeInterval(Double(deltaMinutes) * 60)
         return Text(Self.hourMinute(newStart))
             .font(Bocil.mono(10))
-            .foregroundColor(.white)
+            .foregroundColor(Bocil.bg)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(Bocil.accent)
@@ -659,7 +659,7 @@ struct CalendarView: View {
         }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(Color.white)
+            .background(Bocil.surface)
             .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
 
@@ -737,7 +737,7 @@ struct CalendarView: View {
             }
         }
         .frame(maxHeight: .infinity)
-        .background(Color.white)
+        .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
 
@@ -1136,7 +1136,7 @@ struct CalendarView: View {
             }
             .padding(24)
             .frame(width: 360)
-            .background(Color.white)
+            .background(Bocil.surface)
             .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
         }
     }
