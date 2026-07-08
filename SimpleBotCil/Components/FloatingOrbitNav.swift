@@ -91,6 +91,7 @@ private struct FloatingBadge: View {
     @State private var driftX = false
     @State private var driftY = false
     @State private var wobble = false
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
@@ -101,12 +102,18 @@ private struct FloatingBadge: View {
                 .foregroundColor(isSelected ? Bocil.onAccent : Bocil.ink)
                 .padding(.horizontal, 22)
                 .padding(.vertical, 14)
-                .background(isSelected ? Bocil.accentSoft : Bocil.surface)
+                .background(isSelected ? Bocil.accentSoft : (isHovered ? Bocil.hairline : Bocil.surface))
                 .clipShape(Capsule())
-                .overlay(Capsule().stroke(Bocil.cardBorder, lineWidth: 1.6))
-                .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+                .overlay(Capsule().stroke(isHovered ? Bocil.accentSoft : Bocil.cardBorder, lineWidth: 1.6))
+                .shadow(color: .black.opacity(isHovered ? 0.28 : 0.2), radius: isHovered ? 14 : 10, x: 0, y: isHovered ? 7 : 5)
         }
         .buttonStyle(.plain)
+        .scaleEffect(isHovered ? 1.08 : 1)
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
         .offset(x: driftX ? ampX : -ampX, y: driftY ? ampY : -ampY)
         .rotationEffect(.degrees(wobble ? 2.5 : -2.5))
         .onAppear {
