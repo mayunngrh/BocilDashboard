@@ -247,16 +247,17 @@ struct HistoryView: View {
     @ViewBuilder
     private func conversationRow(_ conversation: Conversation) -> some View {
         let isEditing = editingID == conversation.id
+        let tailH: CGFloat = 12
+        let tailW: CGFloat = 18
 
         HStack(spacing: 16) {
-            Text("▶")
-                .font(.system(size: 12))
+            Image("ChatBubblePixel")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 22, height: 22)
                 .foregroundColor(Bocil.accent)
                 .frame(width: 36, height: 36)
-                .background(Bocil.bg)
-                .overlay(Rectangle().stroke(Bocil.accentSoft, lineWidth: 2))
-
-            WaveformView(bars: WaveformView.mockBars(seed: conversation.id.hashValue))
 
             VStack(alignment: .leading, spacing: 4) {
                 if isEditing {
@@ -318,9 +319,16 @@ struct HistoryView: View {
             }
         }
         .padding(.horizontal, 18)
-        .padding(.vertical, 16)
-        .background(Bocil.surface)
-        .overlay(Rectangle().stroke(isEditing ? Bocil.accentSoft : Bocil.cardBorder, lineWidth: 2))
+        .padding(.top, 16)
+        .padding(.bottom, 16 + tailH)   // reserve space for the tail below the content
+        .background(
+            SpeechBubbleShape(tailHeight: tailH, tailWidth: tailW, tailSide: .leading)
+                .fill(Bocil.surface)
+        )
+        .overlay(
+            SpeechBubbleShape(tailHeight: tailH, tailWidth: tailW, tailSide: .leading)
+                .stroke(isEditing ? Bocil.accentSoft : Bocil.cardBorder, lineWidth: 2)
+        )
         .contentShape(Rectangle())
         .onTapGesture {
             if !isEditing { selectedConversation = conversation }

@@ -1,29 +1,5 @@
 import SwiftUI
 
-// MARK: - Speech bubble shape (tail at bottom-right)
-
-private struct SpeechBubbleShape: Shape {
-    var tailHeight: CGFloat = 16
-    var tailWidth:  CGFloat = 16
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let bubbleBottom = rect.maxY - tailHeight
-
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        // right edge continues all the way to tail tip
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        // diagonal back up to tail base
-        path.addLine(to: CGPoint(x: rect.maxX - tailWidth, y: bubbleBottom))
-        // rest of bottom edge
-        path.addLine(to: CGPoint(x: rect.minX, y: bubbleBottom))
-        path.closeSubpath()
-
-        return path
-    }
-}
-
 // MARK: - HomeView
 
 struct HomeView: View {
