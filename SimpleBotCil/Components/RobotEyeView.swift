@@ -57,18 +57,32 @@ struct RobotEyeView: View {
         .task { await runBlinkLoop() }
     }
 
-    /// Blinks at a random interval, forever, for as long as this view is on screen.
+    /// Blinks at a random interval (3–6s) forever, for as long as this view
+    /// is on screen. Most blinks are a single flutter; occasionally it's a
+    /// quick double-blink, for a more organic, less metronomic feel.
     private func runBlinkLoop() async {
         while !Task.isCancelled {
-            let delay = Double.random(in: 2.5...6.0)
+            let delay = Double.random(in: 2.0...5.0)
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard !Task.isCancelled else { return }
 
-            withAnimation(.easeIn(duration: 0.06)) { isBlinking = true }
-            try? await Task.sleep(nanoseconds: 100_000_000)
+            await blinkOnce()
             guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.1)) { isBlinking = false }
+
+            // ~30% of the time, follow up with a second quick blink.
+            if Double.random(in: 0...1) < 0.3 {
+                try? await Task.sleep(nanoseconds: 130_000_000)
+                guard !Task.isCancelled else { return }
+                await blinkOnce()
+            }
         }
+    }
+
+    private func blinkOnce() async {
+        withAnimation(.easeIn(duration: 0.06)) { isBlinking = true }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeOut(duration: 0.1)) { isBlinking = false }
     }
 
     private func eyePair(width: CGFloat, height: CGFloat, spacing: CGFloat) -> some View {
