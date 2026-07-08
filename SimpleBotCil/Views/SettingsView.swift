@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var appearanceManager: AppearanceManager
     @ObservedObject var connectionSettings: RobotConnectionSettings
+    @StateObject private var memoryService = MemoryBackendService()
 
     @State private var personality: PersonalityMode = .calm
     @State private var language: LanguageMode       = .english
@@ -11,6 +12,7 @@ struct SettingsView: View {
     @State private var remindBefore       = 10
     @State private var cameraAccess       = true
     @State private var personalizationData = true
+    @State private var hoveredMemoryID: String? = nil
 
     private let remindOptions = [5, 10, 15, 30]
 
@@ -27,12 +29,13 @@ struct SettingsView: View {
                 }
                 GridRow(alignment: .top) {
                     appearanceCard
-                    languageCard
+                    Color.clear
                 }
             }
             .padding(32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task { await memoryService.fetchMemories() }
     }
 
     private var personalityCard: some View {
@@ -174,10 +177,102 @@ struct SettingsView: View {
             toggleRow(label: "Personalization data",
                       caption: "Let's Bocil remember your profile and habits",
                       isOn: $personalizationData)
+
+            Rectangle().fill(Bocil.hairline).frame(height: 1)
+                .padding(.vertical, 4)
+
+            memorySection
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Bocil.surface)
+        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+    }
+
+    // MARK: - Memory
+    //
+    // Writes are voice-only (the `memory` tool during a session); this list is
+    // read/delete only, per MEMORY_API.md. Gated server-side by
+    // privacy.personalizationData — when that's off, GET returns an empty list
+    // rather than erroring, so the empty state below covers that case too.
+
+    private var memorySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("MEMORY")
+                    .font(Bocil.header(20))
+                    .foregroundColor(Bocil.ink)
+                Spacer()
+                if memoryService.isLoading {
+                    ProgressView().scaleEffect(0.6)
+                }
+            }
+
+            if let error = memoryService.error {
+                HStack(spacing: 12) {
+                    Text(error)
+                        .font(Bocil.mono(11))
+                        .foregroundColor(Bocil.danger)
+                    Spacer()
+                    Button("Retry") { Task { await memoryService.fetchMemories() } }
+                        .font(Bocil.mono(11))
+                        .foregroundColor(Bocil.ink)
+                        .buttonStyle(.plain)
+                }
+            }
+
+            if memoryService.memories.isEmpty && !memoryService.isLoading {
+                Text("Bocil hasn't remembered anything yet.")
+                    .font(Bocil.mono(12))
+                    .foregroundColor(Bocil.faint)
+            } else {
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(memoryService.memories) { memory in
+                            memoryRow(memory)
+                        }
+                    }
+                }
+                .frame(maxHeight: 220)
+            }
+
+            Button(action: { Task { await memoryService.clearAll() } }) {
+                Text("Clear Bocil's memory")
+                    .font(Bocil.mono(12))
+                    .foregroundColor(Bocil.danger)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .overlay(Rectangle().stroke(Bocil.danger, lineWidth: 1.5))
+            }
+            .buttonStyle(.plain)
+            .disabled(memoryService.memories.isEmpty)
+            .opacity(memoryService.memories.isEmpty ? 0.4 : 1)
+        }
+    }
+
+    private func memoryRow(_ memory: MemoryEntry) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(memory.content)
+                .font(Bocil.mono(13))
+                .foregroundColor(Bocil.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button(action: { Task { await memoryService.deleteMemory(memory) } }) {
+                Image(systemName: "trash")
+                    .font(.system(size: 12))
+                    .foregroundColor(Bocil.danger)
+                    .frame(width: 26, height: 26)
+                    .background(hoveredMemoryID == memory.id ? Bocil.danger.opacity(0.15) : Color.clear)
+                    .overlay(Rectangle().stroke(Bocil.danger.opacity(hoveredMemoryID == memory.id ? 1 : 0), lineWidth: 1.5))
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                hoveredMemoryID = hovering ? memory.id : nil
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Bocil.bg)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
 
@@ -207,15 +302,10 @@ struct SettingsView: View {
                     .buttonStyle(.plain)
                 }
             }
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Bocil.surface)
-        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
-    }
 
-    private var languageCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
+            Rectangle().fill(Bocil.hairline).frame(height: 1)
+                .padding(.vertical, 4)
+
             Text("LANGUAGE")
                 .font(Bocil.header(20))
                 .foregroundColor(Bocil.ink)
