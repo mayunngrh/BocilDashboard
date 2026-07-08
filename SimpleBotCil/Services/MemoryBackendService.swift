@@ -18,8 +18,8 @@ final class MemoryBackendService: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
 
-    private let baseURL = "http://10.235.115.130:8080"
-    private let deviceToken = "O6k4xgaZBLhPHCbzsbZqiyFcPvM7LfsCrw7fdgjy4wWLW8urQ0ERSgWHoXTKDyB1"
+    private let baseURL = BackendConfig.baseURL
+    private let deviceToken = BackendConfig.deviceToken
 
     func fetchMemories() async {
         isLoading = true

@@ -15,7 +15,7 @@ final class ConversationAudioPlayer: NSObject, ObservableObject {
     @Published private(set) var duration: TimeInterval?
     @Published var errorMessage: String?
 
-    private let deviceToken = "O6k4xgaZBLhPHCbzsbZqiyFcPvM7LfsCrw7fdgjy4wWLW8urQ0ERSgWHoXTKDyB1"
+    private let deviceToken = BackendConfig.deviceToken
     private var player: AVAudioPlayer?
 
     func toggle(url: URL) {

@@ -1028,12 +1028,12 @@ struct CalendarView: View {
                 print("[CalendarView] Start date UTC: \(startUTC)")
                 print("[CalendarView] End date UTC: \(endUTC)")
 
-                let url = URL(string: "http://10.235.115.130:8080/api/v1/calendar/events")!
+                let url = URL(string: "\(BackendConfig.baseURL)/api/v1/calendar/events")!
                 print("[CalendarView] POST URL: \(url)")
 
                 var request = URLRequest(url: url)
                 request.httpMethod = "POST"
-                request.setValue("Bearer O6k4xgaZBLhPHCbzsbZqiyFcPvM7LfsCrw7fdgjy4wWLW8urQ0ERSgWHoXTKDyB1", forHTTPHeaderField: "Authorization")
+                request.setValue("Bearer \(BackendConfig.deviceToken)", forHTTPHeaderField: "Authorization")
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.timeoutInterval = 10
 

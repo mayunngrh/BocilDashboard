@@ -16,8 +16,8 @@ final class ProfileBackendService: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
 
-    private let baseURL = "http://10.235.115.130:8080"
-    private let deviceToken = "O6k4xgaZBLhPHCbzsbZqiyFcPvM7LfsCrw7fdgjy4wWLW8urQ0ERSgWHoXTKDyB1"
+    private let baseURL = BackendConfig.baseURL
+    private let deviceToken = BackendConfig.deviceToken
 
     /// `GET /api/v1/profile` — the server returns a default empty profile (not
     /// 404) when none exists, so a successful fetch always yields a `profile`.
