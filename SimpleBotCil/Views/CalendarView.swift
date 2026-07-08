@@ -4,6 +4,7 @@ import SwiftUI
 
 private func daysInGrid(for month: Date) -> [CalendarDay] {
     var cal = Calendar(identifier: .gregorian)
+    cal.timeZone = TimeZone.current
     cal.firstWeekday = 2
     let comps    = cal.dateComponents([.year, .month], from: month)
     let firstDay = cal.date(from: comps)!
@@ -34,6 +35,12 @@ struct CalendarView: View {
     @State private var showAddTask    = false
     @State private var draft          = NewEventDraft()
     @State private var taskTitle      = ""
+    @State private var timelineWidth: CGFloat = 300
+    @State private var selectedEvent: BackendCalendarEvent? = nil
+
+    // Drag-to-reschedule state. `dragOffsetY` is snapped to the 15-minute grid.
+    @State private var draggingEventID: String? = nil
+    @State private var dragOffsetY: CGFloat = 0
 
     private var backendEventsForSelectedDate: [BackendCalendarEvent] {
         let cal = Calendar.current
@@ -71,6 +78,9 @@ struct CalendarView: View {
         }
         .overlay {
             if showAddTask { addTaskOverlay }
+        }
+        .overlay {
+            if let event = selectedEvent { eventDetailOverlay(event) }
         }
         .onAppear {
             Task {
@@ -211,14 +221,16 @@ struct CalendarView: View {
             VStack(spacing: 2) {
                 Text("\(day.day)")
                     .font(Bocil.mono(10))
-                    .foregroundColor(isToday ? Bocil.surface : Bocil.ink)
+                    .foregroundColor(isToday ? Bocil.onAccent : Bocil.ink)
                     .frame(width: 22, height: 22)
-                    .background(
-                        isToday    ? Bocil.ink        :
-                        isSelected ? Bocil.accentSoft : Color.clear
-                    )
-                Rectangle()
-                    .fill(hasDot ? (isToday ? Bocil.surface.opacity(0.9) : Bocil.subtext) : Color.clear)
+                    .background(isToday ? Bocil.accentSoft : Color.clear)
+                    .overlay {
+                        if isSelected && !isToday {
+                            Rectangle().stroke(Bocil.accentSoft, lineWidth: 1.5)
+                        }
+                    }
+                Circle()
+                    .fill(hasDot ? (isToday ? Bocil.onAccent : Bocil.subtext) : Color.clear)
                     .frame(width: 4, height: 4)
             }
         }
@@ -262,45 +274,93 @@ struct CalendarView: View {
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
 
+    private static let hourHeight: CGFloat = 60
+
     private var timelineView: some View {
         let hours = Array(0...23)
-        let hourHeight: CGFloat = 60
+        let hourHeight = Self.hourHeight
+        let gutter: CGFloat = 70
         let now = Date()
         let nowHour = Calendar.current.component(.hour, from: now)
         let nowMin = Calendar.current.component(.minute, from: now)
         let nowOffsetY = CGFloat(nowHour) * hourHeight + CGFloat(nowMin) / 60 * hourHeight
+        let placements = Self.layoutPlacements(
+            for: backendEventsForSelectedDate, hourHeight: hourHeight,
+            availableWidth: max(timelineWidth - gutter - 8, 40)
+        )
 
         return ScrollViewReader { scrollProxy in
             ScrollView {
                 ZStack(alignment: .topLeading) {
+                    // Static hour grid (background lines + labels only).
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(hours, id: \.self) { hour in
                             ZStack(alignment: .topLeading) {
-                                // Hour background
                                 Rectangle()
                                     .fill(Color.white)
                                     .border(Bocil.hairline, width: 1)
 
-                                // Hour label
                                 Text(String(format: "%02d:00", hour))
                                     .font(Bocil.mono(11))
                                     .foregroundColor(Bocil.subtext)
                                     .padding(.leading, 8)
                                     .padding(.top, 4)
-
-                                // Events in this hour
-                                VStack(alignment: .leading, spacing: 4) {
-                                    ForEach(eventsInHour(hour), id: \.id) { event in
-                                        timelineEventBlock(event, hourHeight: hourHeight)
-                                    }
-                                }
-                                .padding(.leading, 70)
-                                .padding(.top, 2)
-                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .frame(height: hourHeight)
                             .id("hour_\(hour)")
                         }
+                    }
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear
+                                .onAppear { timelineWidth = geo.size.width }
+                                .onChange(of: geo.size.width) { _, newWidth in timelineWidth = newWidth }
+                        }
+                    )
+
+                    // Events, absolutely positioned by actual start/end time so a
+                    // multi-hour event spans hour rows correctly instead of being
+                    // clipped inside a single hour's cell; overlapping events split
+                    // into side-by-side columns instead of stacking on top of each other.
+                    // Drag vertically to reschedule (snaps to 15-minute steps).
+                    ForEach(placements) { placed in
+                        let isDragging = draggingEventID == placed.event.id
+                        timelineEventBlock(placed.event, height: placed.height)
+                            .frame(width: placed.width, height: placed.height, alignment: .topLeading)
+                            .clipped()
+                            .overlay(alignment: .top) {
+                                if isDragging { dragTimeBadge(placed.event) }
+                            }
+                            .opacity(isDragging ? 0.9 : 1)
+                            .shadow(color: isDragging ? Color.black.opacity(0.25) : .clear, radius: 4, y: 2)
+                            .contentShape(Rectangle())
+                            .offset(
+                                x: gutter + placed.xOffset,
+                                y: placed.yOffset + (isDragging ? dragOffsetY : 0)
+                            )
+                            .zIndex(isDragging ? 1 : 0)
+                            // One unified gesture avoids tap/drag arbitration
+                            // ambiguity, and highPriority makes it win over the
+                            // enclosing ScrollView's own drag handling. A release
+                            // with no meaningful movement is treated as a tap.
+                            .highPriorityGesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        guard abs(value.translation.height) >= 4 else { return }
+                                        draggingEventID = placed.event.id
+                                        dragOffsetY = Self.snapToGrid(value.translation.height, hourHeight: hourHeight)
+                                    }
+                                    .onEnded { value in
+                                        defer { draggingEventID = nil; dragOffsetY = 0 }
+                                        guard abs(value.translation.height) >= 4 else {
+                                            selectedEvent = placed.event   // tap
+                                            return
+                                        }
+                                        let snapped = Self.snapToGrid(value.translation.height, hourHeight: hourHeight)
+                                        let deltaMinutes = Int((snapped / hourHeight * 60).rounded())
+                                        reschedule(placed.event, byMinutes: deltaMinutes)
+                                    }
+                            )
                     }
 
                     // "Now" indicator line (red)
@@ -311,7 +371,6 @@ struct CalendarView: View {
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Bocil.danger)
-                            .cornerRadius(3)
 
                         Rectangle()
                             .fill(Bocil.danger)
@@ -328,50 +387,193 @@ struct CalendarView: View {
         }
     }
 
-    private func eventsInHour(_ hour: Int) -> [BackendCalendarEvent] {
-        backendEventsForSelectedDate.filter { event in
-            let eventHour = Calendar.current.component(.hour, from: event.startsAt)
-            return eventHour == hour
-        }
+    // MARK: - Timeline event layout
+
+    private struct TimelinePlacement: Identifiable {
+        let id = UUID()
+        let event: BackendCalendarEvent
+        let yOffset: CGFloat
+        let height: CGFloat
+        let xOffset: CGFloat
+        let width: CGFloat
     }
 
+    /// Greedy column-packing layout (the same approach real calendar apps use):
+    /// events are swept in start-time order; each joins the first column whose
+    /// last event already ended, otherwise it opens a new column. Every event in
+    /// a mutually-overlapping cluster shares that cluster's column count, so
+    /// concurrent events render as side-by-side slices instead of overlapping.
+    ///
+    /// Bookkeeping is keyed by each span's index in the sorted array, not by
+    /// `event.id` — recurring/synced calendar entries can share the same
+    /// backend id across distinct occurrences, and keying a dictionary (or a
+    /// SwiftUI `ForEach`) by that id would collide two unrelated events onto
+    /// the same column/view identity.
+    private static func layoutPlacements(
+        for events: [BackendCalendarEvent], hourHeight: CGFloat, availableWidth: CGFloat
+    ) -> [TimelinePlacement] {
+        guard !events.isEmpty else { return [] }
+        let cal = Calendar.current
+        let columnGap: CGFloat = 8
+        let verticalGap: CGFloat = 4
+
+        struct Span { let event: BackendCalendarEvent; let startMin: Int; let endMin: Int }
+        let spans = events.map { event -> Span in
+            let startMin = cal.component(.hour, from: event.startsAt) * 60 + cal.component(.minute, from: event.startsAt)
+            let rawEndMin = cal.component(.hour, from: event.endsAt) * 60 + cal.component(.minute, from: event.endsAt)
+            let endMin = min(max(rawEndMin, startMin + 20), 24 * 60)
+            return Span(event: event, startMin: startMin, endMin: endMin)
+        }.sorted { $0.startMin < $1.startMin }
+
+        var placements: [TimelinePlacement] = []
+        var columnsEndMin: [Int] = []
+        var columnOfIndex: [Int: Int] = [:]
+        var clusterIndices: [Int] = []
+        var clusterMaxEnd = 0
+
+        func flushCluster() {
+            guard !clusterIndices.isEmpty else { return }
+            let columnCount = max(columnsEndMin.count, 1)
+            let width = availableWidth / CGFloat(columnCount)
+            for idx in clusterIndices {
+                let span = spans[idx]
+                let col = columnOfIndex[idx] ?? 0
+                let rawHeight = CGFloat(span.endMin - span.startMin) / 60 * hourHeight
+                placements.append(TimelinePlacement(
+                    event: span.event,
+                    yOffset: CGFloat(span.startMin) / 60 * hourHeight,
+                    height: max(rawHeight - verticalGap, 26),
+                    xOffset: CGFloat(col) * width,
+                    width: max(width - columnGap, 40)
+                ))
+            }
+            columnsEndMin = []
+            columnOfIndex = [:]
+            clusterIndices = []
+            clusterMaxEnd = 0
+        }
+
+        for (i, span) in spans.enumerated() {
+            if !clusterIndices.isEmpty && span.startMin >= clusterMaxEnd {
+                flushCluster()
+            }
+            if let colIdx = columnsEndMin.firstIndex(where: { $0 <= span.startMin }) {
+                columnsEndMin[colIdx] = span.endMin
+                columnOfIndex[i] = colIdx
+            } else {
+                columnsEndMin.append(span.endMin)
+                columnOfIndex[i] = columnsEndMin.count - 1
+            }
+            clusterIndices.append(i)
+            clusterMaxEnd = max(clusterMaxEnd, span.endMin)
+        }
+        flushCluster()
+
+        return placements
+    }
+
+    // MARK: - Timeline event block
+    //
+    // Styled after macOS Calendar's day-view chips: a solid color bar on the
+    // leading edge, a translucent (50%) blue fill, and dark, readable text
+    // rather than white-on-solid. Corners stay sharp, matching this app's
+    // hard-edged boxes elsewhere.
+
     @ViewBuilder
-    private func timelineEventBlock(_ event: BackendCalendarEvent, hourHeight: CGFloat) -> some View {
+    private func timelineEventBlock(_ event: BackendCalendarEvent, height: CGFloat) -> some View {
         let startHour = Calendar.current.component(.hour, from: event.startsAt)
         let startMin = Calendar.current.component(.minute, from: event.startsAt)
         let endHour = Calendar.current.component(.hour, from: event.endsAt)
         let endMin = Calendar.current.component(.minute, from: event.endsAt)
-
         let startTimeStr = String(format: "%02d:%02d", startHour, startMin)
         let endTimeStr = String(format: "%02d:%02d", endHour, endMin)
 
-        let durationMins = Int(event.endsAt.timeIntervalSince(event.startsAt) / 60)
-        let blockHeight = CGFloat(durationMins) / 60 * hourHeight
+        // Short blocks can't fit all three lines without their text spilling into
+        // the next event, so drop the secondary lines as the box shrinks.
+        let showLocation = height >= 54 && !event.location.isEmpty
+        let showTime = height >= 38
 
-        VStack(alignment: .leading, spacing: 2) {
-            Text(event.title)
-                .font(Bocil.mono(12))
-                .fontWeight(.semibold)
-                .foregroundColor(.white)
-                .lineLimit(2)
+        HStack(alignment: .top, spacing: 0) {
+            Rectangle()
+                .fill(Bocil.accentSoft)
+                .frame(width: 3)
 
-            if !event.location.isEmpty {
-                Text(event.location)
-                    .font(Bocil.mono(10))
-                    .foregroundColor(.white.opacity(0.9))
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event.title)
+                    .font(Bocil.mono(12))
+                    .fontWeight(.semibold)
+                    .foregroundColor(Bocil.ink)
+                    .lineLimit(height < 38 ? 1 : 2)
+
+                if showLocation {
+                    Text(event.location)
+                        .font(Bocil.mono(10))
+                        .foregroundColor(Bocil.subtext)
+                        .lineLimit(1)
+                }
+
+                if showTime {
+                    Text(startTimeStr + " - " + endTimeStr)
+                        .font(Bocil.mono(9))
+                        .foregroundColor(Bocil.subtext)
+                }
             }
-
-            Text(startTimeStr + " - " + endTimeStr)
-                .font(Bocil.mono(9))
-                .foregroundColor(.white.opacity(0.8))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
         }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: max(blockHeight, 50))
-        .background(Bocil.accent)
-        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1))
-        .cornerRadius(4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Bocil.accentSoft.opacity(0.5))
+    }
+
+    // MARK: - Drag-to-reschedule
+
+    /// Small floating pill showing the event's live start time while dragging,
+    /// so the user can see exactly where it will land before releasing.
+    private func dragTimeBadge(_ event: BackendCalendarEvent) -> some View {
+        let deltaMinutes = Int((dragOffsetY / Self.hourHeight * 60).rounded())
+        let newStart = event.startsAt.addingTimeInterval(Double(deltaMinutes) * 60)
+        return Text(Self.hourMinute(newStart))
+            .font(Bocil.mono(10))
+            .foregroundColor(.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Bocil.accent)
+            .offset(y: -10)
+    }
+
+    private static func hourMinute(_ date: Date) -> String {
+        let f = DateFormatter(); f.dateFormat = "HH:mm"
+        return f.string(from: date)
+    }
+
+    /// Snaps a raw drag distance (points) to the nearest 15-minute step.
+    private static func snapToGrid(_ dy: CGFloat, hourHeight: CGFloat) -> CGFloat {
+        let stepPixels = hourHeight / 4   // 15 minutes
+        return (dy / stepPixels).rounded() * stepPixels
+    }
+
+    /// Shifts an event by `deltaMinutes`, keeping its duration, clamping so it
+    /// stays within the same day, then persists via the backend PATCH.
+    private func reschedule(_ event: BackendCalendarEvent, byMinutes deltaMinutes: Int) {
+        guard deltaMinutes != 0 else { return }
+        let cal = Calendar.current
+        let durationMin = Int(event.endsAt.timeIntervalSince(event.startsAt) / 60)
+        let startMin = cal.component(.hour, from: event.startsAt) * 60 + cal.component(.minute, from: event.startsAt)
+
+        // Clamp so the whole event stays inside 00:00–24:00 of its day.
+        let newStartMin = min(max(startMin + deltaMinutes, 0), 24 * 60 - durationMin)
+        let effectiveDelta = newStartMin - startMin
+        guard effectiveDelta != 0 else { return }
+
+        let newStart = event.startsAt.addingTimeInterval(Double(effectiveDelta) * 60)
+        let newEnd = event.endsAt.addingTimeInterval(Double(effectiveDelta) * 60)
+
+        // Apply locally first (synchronously, this frame) so the card stays put
+        // at its new time instead of snapping back before the PATCH returns.
+        let previous = backendService.applyLocalTimeChange(id: event.id, startsAt: newStart, endsAt: newEnd)
+        Task {
+            await backendService.persistTimeChange(id: event.id, startsAt: newStart, endsAt: newEnd, previous: previous)
+        }
     }
 
     @ViewBuilder
@@ -490,6 +692,25 @@ struct CalendarView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(20)
+            } else if let error = tasksService.error {
+                VStack(alignment: .center, spacing: 10) {
+                    Text(error)
+                        .font(Bocil.mono(11))
+                        .foregroundColor(Bocil.danger)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(action: { Task { await tasksService.fetchTasks() } }) {
+                        Text("Retry")
+                            .font(Bocil.mono(11))
+                            .foregroundColor(Bocil.ink)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .overlay(Rectangle().stroke(Bocil.danger, lineWidth: 1.5))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(20)
             } else if tasksService.tasks.isEmpty {
                 VStack(alignment: .center, spacing: 12) {
                     Text("No tasks")
@@ -517,10 +738,22 @@ struct CalendarView: View {
     @ViewBuilder
     private func taskRow(_ task: BackendTask) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: (task.completed ?? false) ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 14))
-                .foregroundColor((task.completed ?? false) ? Bocil.accent : Bocil.subtext)
-                .padding(.top, 2)
+            Button(action: { Task { await tasksService.toggleCompletion(task) } }) {
+                ZStack {
+                    Rectangle()
+                        .fill((task.completed ?? false) ? Bocil.ink : Color.clear)
+                    Rectangle()
+                        .stroke(Bocil.cardBorder, lineWidth: 1.5)
+                    if task.completed ?? false {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(Bocil.surface)
+                    }
+                }
+                .frame(width: 14, height: 14)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title)
@@ -529,19 +762,126 @@ struct CalendarView: View {
                     .strikethrough(task.completed ?? false)
                     .lineLimit(2)
 
-                if let due = task.due {
-                    Text(due)
+                if let due = task.dueAt {
+                    Text(Self.formatTaskDue(due))
                         .font(Bocil.mono(9))
                         .foregroundColor(Bocil.subtext)
                 }
             }
             Spacer()
+
+            Button(action: { Task { await tasksService.deleteTask(task) } }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(Bocil.faint)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
     }
 
     // MARK: - Add event overlay
+
+    // MARK: - Event detail overlay
+    //
+    // Read-only detail popup shown when a timeline event card is tapped. The
+    // backend exposes no update/delete endpoint for events (only GET + POST),
+    // so this is view-only — there's nothing to edit or remove here yet.
+
+    @ViewBuilder
+    private func eventDetailOverlay(_ event: BackendCalendarEvent) -> some View {
+        ZStack {
+            Color.black.opacity(0.25)
+                .ignoresSafeArea()
+                .onTapGesture { selectedEvent = nil }
+
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(alignment: .top, spacing: 12) {
+                    Rectangle()
+                        .fill(event.isImportant ? Color.red : Bocil.accentSoft)
+                        .frame(width: 4)
+                        .frame(maxHeight: .infinity)
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(event.title)
+                            .font(Bocil.header(18))
+                            .foregroundColor(Bocil.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if event.isImportant {
+                            Text("IMPORTANT")
+                                .font(Bocil.mono(10))
+                                .foregroundColor(Color.red)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .overlay(Rectangle().stroke(Color.red, lineWidth: 1))
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+
+                Rectangle().fill(Bocil.hairline).frame(height: 1)
+
+                detailRow(icon: "clock", text: Self.eventTimeRange(event))
+                detailRow(icon: "hourglass", text: Self.eventDurationLabel(event))
+                if !event.location.isEmpty {
+                    detailRow(icon: "mappin.and.ellipse", text: event.location)
+                }
+                if let notes = event.notes, !notes.isEmpty {
+                    detailRow(icon: "note.text", text: notes)
+                }
+
+                HStack {
+                    Spacer()
+                    Button("Close") { selectedEvent = nil }
+                        .font(Bocil.mono(13)).foregroundColor(Bocil.ink)
+                        .padding(.horizontal, 16).padding(.vertical, 9)
+                        .background(Bocil.accentSoft)
+                        .buttonStyle(.plain)
+                }
+            }
+            .padding(24)
+            .frame(width: 360)
+            .background(Bocil.surface)
+            .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
+        }
+    }
+
+    @ViewBuilder
+    private func detailRow(icon: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundColor(Bocil.subtext)
+                .frame(width: 16, alignment: .center)
+            Text(text)
+                .font(Bocil.mono(13))
+                .foregroundColor(Bocil.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private static func eventTimeRange(_ event: BackendCalendarEvent) -> String {
+        let dayF = DateFormatter(); dayF.dateFormat = "EEE, MMM d"
+        let timeF = DateFormatter(); timeF.dateFormat = "HH:mm"
+        let cal = Calendar.current
+        if cal.isDate(event.startsAt, inSameDayAs: event.endsAt) {
+            return "\(dayF.string(from: event.startsAt))  ·  \(timeF.string(from: event.startsAt)) – \(timeF.string(from: event.endsAt))"
+        }
+        // Multi-day event: show the end day too.
+        return "\(dayF.string(from: event.startsAt)) \(timeF.string(from: event.startsAt)) → \(dayF.string(from: event.endsAt)) \(timeF.string(from: event.endsAt))"
+    }
+
+    private static func eventDurationLabel(_ event: BackendCalendarEvent) -> String {
+        let mins = Int(event.endsAt.timeIntervalSince(event.startsAt) / 60)
+        let h = mins / 60, m = mins % 60
+        if h > 0 && m > 0 { return "\(h)h \(m)m" }
+        if h > 0 { return "\(h)h" }
+        return "\(m)m"
+    }
 
     private var addEventOverlay: some View {
         ZStack {
@@ -675,7 +1015,7 @@ struct CalendarView: View {
                 print("[CalendarView] Start date UTC: \(startUTC)")
                 print("[CalendarView] End date UTC: \(endUTC)")
 
-                let url = URL(string: "http://10.64.52.184:8080/api/v1/calendar/events")!
+                let url = URL(string: "http://10.235.115.130:8080/api/v1/calendar/events")!
                 print("[CalendarView] POST URL: \(url)")
 
                 var request = URLRequest(url: url)
@@ -802,6 +1142,15 @@ struct CalendarView: View {
                 taskTitle = ""
             }
         }
+    }
+
+    /// "Jul 7, 11:00 AM" from the task's raw ISO 8601 `dueAt`; falls back to the
+    /// raw string if it doesn't parse (defensive against a future format change).
+    private static func formatTaskDue(_ dueAt: String) -> String {
+        guard let date = ISO8601DateFormatter().date(from: dueAt) else { return dueAt }
+        let f = DateFormatter()
+        f.dateFormat = "MMM d, h:mm a"
+        return f.string(from: date)
     }
 }
 

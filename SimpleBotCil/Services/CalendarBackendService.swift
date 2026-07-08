@@ -21,7 +21,7 @@ final class CalendarBackendService: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
 
-    private let baseURL = "http://10.64.52.184:8080"
+    private let baseURL = "http://10.235.115.130:8080"
     private let deviceToken = "O6k4xgaZBLhPHCbzsbZqiyFcPvM7LfsCrw7fdgjy4wWLW8urQ0ERSgWHoXTKDyB1"
 
     func fetchEvents(from: Date, to: Date) async {
@@ -58,6 +58,47 @@ final class CalendarBackendService: ObservableObject {
                 self.error = error.localizedDescription
                 self.isLoading = false
             }
+        }
+    }
+
+    /// Applies a reschedule to the local `events` array immediately (so a drag
+    /// feels instant) and returns the pre-change snapshot for rollback. Call
+    /// this synchronously on the main actor, then `persistTimeChange` to save.
+    @discardableResult
+    func applyLocalTimeChange(id: String, startsAt: Date, endsAt: Date) -> [BackendCalendarEvent] {
+        let previous = events
+        if let idx = events.firstIndex(where: { $0.id == id }) {
+            let e = events[idx]
+            events[idx] = BackendCalendarEvent(
+                id: e.id, title: e.title, startsAt: startsAt, endsAt: endsAt,
+                location: e.location, isImportant: e.isImportant, notes: e.notes
+            )
+        }
+        return previous
+    }
+
+    /// Persists a reschedule via `PATCH /api/v1/calendar/events/{id}` (only the
+    /// times change; title/location/etc. stay as-is). On failure, rolls the
+    /// local `events` array back to `previous` and surfaces the error.
+    func persistTimeChange(id: String, startsAt: Date, endsAt: Date, previous: [BackendCalendarEvent]) async {
+        do {
+            let iso = ISO8601DateFormatter()
+            let url = URL(string: "\(baseURL)/api/v1/calendar/events/\(id)")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "PATCH"
+            request.setValue("Bearer \(deviceToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 10
+            request.httpBody = try JSONSerialization.data(withJSONObject: [
+                "startsAt": iso.string(from: startsAt),
+                "endsAt": iso.string(from: endsAt),
+            ])
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            try Self.checkOKStatus(response, data: data)
+        } catch {
+            self.events = previous
+            self.error = error.localizedDescription
         }
     }
 

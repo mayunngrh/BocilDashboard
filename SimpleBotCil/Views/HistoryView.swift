@@ -36,9 +36,17 @@ struct HistoryView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     header
 
-                    switch vm.filter {
-                    case .thisWeek: weekContent
-                    case .day(let date): dayContent(date)
+                    if let errorMessage = vm.errorMessage {
+                        errorBanner(errorMessage)
+                    }
+
+                    if vm.isLoading && vm.conversations.isEmpty {
+                        loadingState
+                    } else {
+                        switch vm.filter {
+                        case .thisWeek: weekContent
+                        case .day(let date): dayContent(date)
+                        }
                     }
                 }
                 .padding(.horizontal, 32)
@@ -59,6 +67,41 @@ struct HistoryView: View {
                     .padding(.trailing, 32)
             }
         }
+    }
+
+    // MARK: - Loading / error states
+
+    private var loadingState: some View {
+        VStack(spacing: 10) {
+            ProgressView()
+            Text("Loading conversations…")
+                .font(Bocil.mono(14))
+                .foregroundColor(Bocil.faint)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 240)
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(spacing: 12) {
+            Text(message)
+                .font(Bocil.mono(13))
+                .foregroundColor(Bocil.danger)
+            Spacer()
+            Button(action: { Task { await vm.load() } }) {
+                Text("Retry")
+                    .font(Bocil.mono(12))
+                    .foregroundColor(Bocil.ink)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .overlay(Rectangle().stroke(Bocil.danger, lineWidth: 1.5))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Bocil.danger.opacity(0.08))
+        .overlay(Rectangle().stroke(Bocil.danger, lineWidth: 1.5))
     }
 
     private var header: some View {
@@ -222,7 +265,7 @@ struct HistoryView: View {
                         .font(Bocil.mono(16))
                         .foregroundColor(conversation.title == nil ? Bocil.subtext : Bocil.ink)
                 }
-                Text("\(conversation.startTimeLabel) · \(conversation.messages.count) voice messages")
+                Text("\(conversation.startTimeLabel) · \(conversation.messageCount) voice messages")
                     .font(Bocil.mono(12))
                     .foregroundColor(Bocil.faint)
             }

@@ -11,17 +11,27 @@ final class HistoryViewModel: ObservableObject {
 
     @Published private(set) var conversations: [Conversation] = []
     @Published var filter: HistoryFilter = .thisWeek
+    @Published private(set) var isLoading = false
+    @Published var errorMessage: String?
 
     private let repository: ConversationRepository
     private let calendar = Calendar.current
 
-    init(repository: ConversationRepository = MockConversationRepository()) {
+    init(repository: ConversationRepository = APIConversationRepository()) {
         self.repository = repository
     }
 
-    /// Fetches conversations from the repository. Call from `.task`.
+    /// Fetches conversations from the repository. Call from `.task` and from
+    /// the error banner's retry button.
     func load() async {
-        conversations = await repository.fetchConversations()
+        isLoading = true
+        errorMessage = nil
+        do {
+            conversations = try await repository.fetchConversations()
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+        isLoading = false
     }
 
     // MARK: - "This Week" grouped view

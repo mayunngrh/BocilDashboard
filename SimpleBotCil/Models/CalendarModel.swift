@@ -46,7 +46,8 @@ struct NewEventDraft {
     var isImportant: Bool = false
 
     var startDate: Date {
-        let cal = Calendar.current
+        var cal = Calendar.current
+        cal.timeZone = TimeZone.current
         let now = Date()
         var comps = cal.dateComponents([.year, .month, .day], from: now)
         comps.hour = Int(startHourStr) ?? 9
@@ -56,7 +57,8 @@ struct NewEventDraft {
     }
 
     var endDate: Date {
-        let cal = Calendar.current
+        var cal = Calendar.current
+        cal.timeZone = TimeZone.current
         let now = Date()
         var comps = cal.dateComponents([.year, .month, .day], from: now)
         comps.hour = Int(endHourStr) ?? 10
