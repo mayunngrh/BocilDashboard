@@ -2,6 +2,16 @@ import SwiftUI
 import AVFoundation
 import Combine
 
+// Publishes the timer button's bounds so the dropdown can be rendered by a
+// top-level container (above the control card's own border, which would
+// otherwise paint over an inner overlay).
+private struct TimerAnchorKey: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? = nil
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = value ?? nextValue()
+    }
+}
+
 struct FocusView: View {
     @ObservedObject var serial: SerialManager
     @EnvironmentObject var focusStore: FocusStore
@@ -27,6 +37,7 @@ struct FocusView: View {
     @State private var lastSittingAlertAt: Date?
     @State private var lastPhoneAlertAt: Date?
     private let reAlertCooldown: TimeInterval = 30
+
 
     private var cameraActive: Bool {
         userAllowedCamera && camera.isAuthorized
@@ -114,6 +125,25 @@ struct FocusView: View {
 
             if showCustomPopup {
                 customTimePopup
+            }
+        }
+        // Dropdown is drawn here, above the entire page (camera + control card
+        // and its border), and positioned from the button's published anchor —
+        // so nothing can paint over it and it lands just below the button.
+        .overlayPreferenceValue(TimerAnchorKey.self) { anchor in
+            GeometryReader { proxy in
+                if showTimerDropdown, let anchor {
+                    let rect = proxy[anchor]
+
+                    // Invisible full-screen catcher: tap outside to dismiss.
+                    Color.black.opacity(0.001)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .onTapGesture { showTimerDropdown = false }
+
+                    timerOptionsList
+                        .frame(width: rect.width)
+                        .offset(x: rect.minX, y: rect.maxY + 4)
+                }
             }
         }
         .onDisappear { camera.stop() }
@@ -310,8 +340,11 @@ struct FocusView: View {
                 Text(timerLabel)
                     .font(Bocil.mono(13))
                     .foregroundColor(timerLabel == "Select timer" ? Bocil.subtext : Bocil.ink)
-                Text("∨")
-                    .font(Bocil.mono(12))
+                Image("ChevronDownPixel")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 12, height: 12)
                     .foregroundColor(Bocil.subtext)
             }
             .padding(.horizontal, 14)
@@ -321,13 +354,7 @@ struct FocusView: View {
         }
         .buttonStyle(.plain)
         .overlay(Rectangle().stroke(Bocil.accentSoft, lineWidth: 1.5))
-        .overlay(alignment: .topLeading) {
-            if showTimerDropdown {
-                timerOptionsList
-                    .offset(y: 41)
-            }
-        }
-        .zIndex(showTimerDropdown ? 10 : 0)
+        .anchorPreference(key: TimerAnchorKey.self, value: .bounds) { $0 }
     }
 
     private var timerOptionsList: some View {
@@ -351,6 +378,7 @@ struct FocusView: View {
                 }
             }
         }
+        .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.accentSoft, lineWidth: 1.5))
     }
 

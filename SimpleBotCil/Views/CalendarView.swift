@@ -119,8 +119,11 @@ struct CalendarView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 0) {
                     Button(action: { shiftMonth(-1) }) {
-                        Text("‹")
-                            .font(.system(size: 16, weight: .medium))
+                        Image("ChevronLeftPixel")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 12, height: 12)
                             .foregroundColor(Bocil.ink)
                             .frame(width: 22, height: 22)
                     }
@@ -131,8 +134,11 @@ struct CalendarView: View {
                         .foregroundColor(Bocil.ink)
                     Spacer()
                     Button(action: { shiftMonth(1) }) {
-                        Text("›")
-                            .font(.system(size: 16, weight: .medium))
+                        Image("ChevronRightPixel")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 12, height: 12)
                             .foregroundColor(Bocil.ink)
                             .frame(width: 22, height: 22)
                     }

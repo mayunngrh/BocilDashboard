@@ -130,13 +130,21 @@ struct HistoryView: View {
             showCalendar = false
             filterOpen.toggle()
         }) {
-            Text("Filter: \(filterLabel) ▾")
-                .font(Bocil.mono(14))
-                .foregroundColor(Bocil.accent)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(Bocil.surface)
-                .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
+            HStack(spacing: 8) {
+                Text("Filter: \(filterLabel)")
+                    .font(Bocil.mono(14))
+                    .foregroundColor(Bocil.accent)
+                Image("ChevronDownPixel")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 12, height: 12)
+                    .foregroundColor(Bocil.accent)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(Bocil.surface)
+            .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 2))
         }
         .buttonStyle(.plain)
     }

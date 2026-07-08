@@ -116,8 +116,11 @@ struct HomeView: View {
                             Text("Save")
                                 .font(Bocil.mono(14))
                         } else {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 12, weight: .medium))
+                            Image("PencilPixel")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 12, height: 12)
                         }
                     }
                     .foregroundColor(isEditing ? Bocil.onAccent : Bocil.ink)
@@ -191,7 +194,7 @@ struct HomeView: View {
             Rectangle().fill(Bocil.hairline).frame(height: 1)
 
             summaryRow(
-                icon:   "calendar",
+                icon:   "CalendarPixel",
                 value:  upcomingCount == 0 ? "0" : "\(upcomingCount)",
                 label:  upcomingCount == 0 ? "nothing scary yet"
                         : upcomingCount == 1 ? "upcoming event" : "upcoming events",
@@ -201,7 +204,7 @@ struct HomeView: View {
             )
             Rectangle().fill(Bocil.hairline).frame(height: 1)
             summaryRow(
-                icon:   "checkmark.square",
+                icon:   "ListPixel",
                 value:  questsCount == 0 ? "0" : "\(questsCount)",
                 label:  questsCount == 0 ? "looks pretty chill"
                         : questsCount == 1 ? "tiny quest" : "tiny quests",
@@ -211,7 +214,7 @@ struct HomeView: View {
             )
             Rectangle().fill(Bocil.hairline).frame(height: 1)
             summaryRow(
-                icon:   "clock",
+                icon:   "TimePixel",
                 value:  focusMinutes == 0 ? "0h" : focusValueText,
                 label:  focusMinutes == 0 ? "you haven't locked in today" : "focus time spent",
                 sub:    focusMinutes == 0 ? "" : "today",
@@ -226,8 +229,11 @@ struct HomeView: View {
     private func summaryRow(icon: String, value: String, label: String,
                              sub: String, empty: Bool, action: @escaping () -> Void) -> some View {
         HStack(spacing: 14) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .regular))
+            Image(icon)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 16, height: 16)
                 .foregroundColor(empty ? Bocil.faint : Bocil.subtext)
                 .frame(width: 18)
             Text(value)
