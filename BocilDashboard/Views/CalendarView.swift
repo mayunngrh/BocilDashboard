@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 // MARK: - Calendar grid helper
 
@@ -56,6 +57,7 @@ struct CalendarView: View {
     // Drag-to-reschedule state. `dragOffsetY` is snapped to the 15-minute grid.
     @State private var draggingEventID: String? = nil
     @State private var dragOffsetY: CGFloat = 0
+
 
     /// Single-letter Mon–Sun initials, derived from the active locale's own
     /// weekday symbols (matches `MiniCalendarView`'s approach) rather than
@@ -1224,7 +1226,15 @@ struct CalendarView: View {
                     detailRow(asset: "ListPixel", text: notes)
                 }
 
-                HStack {
+                HStack(spacing: 8) {
+                    Button("Test Push") {
+                        simulatePushNotification(for: event)
+                    }
+                    .font(Bocil.mono(11)).foregroundColor(Bocil.onAccent)
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(Bocil.accent)
+                    .buttonStyle(.plain)
+
                     Spacer()
                     Button("common.close") { selectedEvent = nil }
                         .font(Bocil.mono(13)).foregroundColor(Bocil.ink)
@@ -1550,6 +1560,37 @@ struct CalendarView: View {
 
     /// "Jul 7, 11:00 AM" from the task's raw ISO 8601 `dueAt`; falls back to the
     /// raw string if it doesn't parse (defensive against a future format change).
+    /// Simulate a system push notification for testing
+    private func simulatePushNotification(for event: BackendCalendarEvent) {
+        let formatter = ISO8601DateFormatter()
+        let companion: [AnyHashable: Any] = [
+            "type": "reminder",
+            "kind": "event",
+            "id": event.id,
+            "title": event.title,
+            "fireAt": formatter.string(from: Date()),
+            "startsAt": formatter.string(from: event.startsAt),
+            "remindBeforeMinutes": 10
+        ]
+
+        // Create a system notification request
+        let content = UNMutableNotificationContent()
+        content.title = "Event Reminder"
+        content.body = event.title
+        content.sound = .default
+        content.userInfo = companion
+
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false))
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("[CalendarView] Failed to schedule notification: \(error)")
+            } else {
+                print("[CalendarView] System notification scheduled for event: \(event.title)")
+            }
+        }
+    }
+
     private func formatTaskDue(_ dueAt: String) -> String {
         guard let date = ISO8601DateFormatter().date(from: dueAt) else { return dueAt }
         let f = DateFormatter()

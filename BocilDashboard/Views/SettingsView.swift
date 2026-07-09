@@ -58,12 +58,27 @@ struct SettingsView: View {
         .onAppear { draftServerURL = backendConfig.baseURL }
     }
 
-    /// Loads server config and reflects the saved personality in the UI.
+    /// Loads server config and reflects the saved personality and notification settings in the UI.
     private func loadConfig() async {
         await configService.fetchConfig()
+
+        // Load personality
         if let value = configService.config?.personality,
            let mode = PersonalityMode(apiValue: value) {
             personality = mode
+        }
+
+        // Load notification settings
+        if let notif = configService.config?.notifications {
+            if let taskReminders = notif.taskReminders {
+                self.taskReminders = taskReminders
+            }
+            if let calendarAlerts = notif.calendarAlerts {
+                self.calendarAlerts = calendarAlerts
+            }
+            if let remindBefore = notif.remindBeforeMinutes {
+                self.remindBefore = remindBefore
+            }
         }
     }
 
@@ -258,8 +273,16 @@ struct SettingsView: View {
                 .foregroundColor(Bocil.ink)
 
             toggleRow(label: "settings.notifications.taskReminders", isOn: $taskReminders)
+                .onChange(of: taskReminders) { _, newValue in
+                    Task { await configService.updateNotifications(taskReminders: newValue) }
+                }
+
             Rectangle().fill(Bocil.hairline).frame(height: 1)
+
             toggleRow(label: "settings.notifications.calendarAlerts", isOn: $calendarAlerts)
+                .onChange(of: calendarAlerts) { _, newValue in
+                    Task { await configService.updateNotifications(calendarAlerts: newValue) }
+                }
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("settings.notifications.remindBefore")
@@ -268,7 +291,10 @@ struct SettingsView: View {
 
                 HStack(spacing: 8) {
                     ForEach(remindOptions, id: \.self) { min in
-                        Button(action: { remindBefore = min }) {
+                        Button(action: {
+                            remindBefore = min
+                            Task { await configService.updateNotifications(remindBeforeMinutes: min) }
+                        }) {
                             Text("\(min)m")
                                 .font(Bocil.mono(12))
                                 .foregroundColor(remindBefore == min ? Bocil.onAccent : Bocil.subtext)

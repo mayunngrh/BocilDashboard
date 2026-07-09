@@ -3,6 +3,8 @@ import UserNotifications
 
 @main
 struct BocilDashboardApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     @StateObject private var serial        = SerialManager()
     @StateObject private var appearance    = AppearanceManager()
     @StateObject private var language      = AppLanguageManager()
