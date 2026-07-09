@@ -114,7 +114,7 @@ struct HomeView: View {
                     .font(Bocil.header(16))
                     .foregroundColor(Bocil.ink)
                 Spacer()
-                Button(action: toggleEditing) {
+                Button(action: { isEditing ? saveEditing() : startEditing(focusingName: true) }) {
                     Group {
                         if isEditing {
                             Text("common.save")
@@ -149,6 +149,9 @@ struct HomeView: View {
                 } else {
                     Text(userName.isEmpty ? String(localized: "home.whoAmI.namePlaceholder", locale: locale) : userName)
                         .foregroundColor(userName.isEmpty ? Bocil.faint : Bocil.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) { startEditing(focusingName: true) }
                 }
             }
             .font(Bocil.mono(18))
@@ -163,10 +166,13 @@ struct HomeView: View {
                         TextField("home.whoAmI.rolePlaceholder", text: $draftRole)
                             .textFieldStyle(.plain)
                             .focused($roleFocused)
-                            .onSubmit { toggleEditing() }
+                            .onSubmit { saveEditing() }
                     } else {
                         Text(roleText.isEmpty ? String(localized: "home.whoAmI.rolePlaceholder", locale: locale) : roleText)
                             .foregroundColor(roleText.isEmpty ? Bocil.faint : Bocil.ink)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .onTapGesture(count: 2) { startEditing(focusingName: false) }
                     }
                 }
                 .font(Bocil.mono(18))
@@ -179,6 +185,8 @@ struct HomeView: View {
         }
         .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+        .onChange(of: nameFocused) { _, _ in maybeAutoSave() }
+        .onChange(of: roleFocused) { _, _ in maybeAutoSave() }
     }
 
     // MARK: - Summary card
@@ -347,17 +355,27 @@ struct HomeView: View {
 
     // MARK: - Edit helpers
 
-    private func toggleEditing() {
-        if isEditing {
-            userName = draftName.trimmingCharacters(in: .whitespaces)
-            roleText = draftRole.trimmingCharacters(in: .whitespaces)
-            isEditing = false
-            Task { await profileService.updateProfile(name: userName, role: roleText) }
-        } else {
-            draftName = userName
-            draftRole = roleText
-            isEditing = true
-            nameFocused = true
+    private func startEditing(focusingName: Bool) {
+        draftName = userName
+        draftRole = roleText
+        isEditing = true
+        if focusingName { nameFocused = true } else { roleFocused = true }
+    }
+
+    private func saveEditing() {
+        guard isEditing else { return }
+        userName = draftName.trimmingCharacters(in: .whitespaces)
+        roleText = draftRole.trimmingCharacters(in: .whitespaces)
+        isEditing = false
+        Task { await profileService.updateProfile(name: userName, role: roleText) }
+    }
+
+    private func maybeAutoSave() {
+        Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            if isEditing && !nameFocused && !roleFocused {
+                saveEditing()
+            }
         }
     }
 }

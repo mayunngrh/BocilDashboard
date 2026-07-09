@@ -13,7 +13,7 @@ struct SettingsView: View {
     @State private var taskReminders      = true
     @State private var calendarAlerts     = true
     @State private var remindBefore       = 10
-    @State private var cameraAccess       = true
+    @AppStorage("bocil.focus.camera.allowed") private var cameraAccess: Bool = false
     @State private var personalizationData = true
     @State private var hoveredMemoryID: String? = nil
     @State private var draftServerURL: String = ""

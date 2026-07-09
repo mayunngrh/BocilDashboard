@@ -271,7 +271,7 @@ struct CalendarView: View {
                             Rectangle().stroke(Bocil.accentSoft, lineWidth: 1.5)
                         }
                     }
-                Circle()
+                Rectangle()
                     .fill(hasDot ? (isToday ? Bocil.onAccent : Bocil.subtext) : Color.clear)
                     .frame(width: 4, height: 4)
             }
