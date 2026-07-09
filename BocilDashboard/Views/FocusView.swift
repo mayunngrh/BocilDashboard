@@ -16,6 +16,7 @@ struct FocusView: View {
     @ObservedObject var serial: SerialManager
     @EnvironmentObject var focusStore: FocusStore
     @EnvironmentObject var profileService: ProfileBackendService
+    @Environment(\.locale) private var locale
 
     @StateObject private var camera = CameraManager()
     @StateObject private var detector = EmotionDetector()
@@ -75,17 +76,24 @@ struct FocusView: View {
     }
 
     private var timerLabel: String {
-        if noTimeSelected { return "No time" }
+        if noTimeSelected { return String(localized: "focus.timerOption.noTime", locale: locale) }
         if customSelected {
             let h = Int(customHours) ?? 0
             let m = Int(customMinutes) ?? 0
-            if h > 0 && m > 0 { return "Timer (\(h)h \(m)m)" }
-            if h > 0 { return "Timer (\(h)h)" }
-            if m > 0 { return "Timer (\(m) mins)" }
-            return "Custom"
+            if h > 0 && m > 0 { return String(format: String(localized: "focus.timerLabel.hoursMinutes", locale: locale), h, m) }
+            if h > 0 { return String(format: String(localized: "focus.timerLabel.hours", locale: locale), h) }
+            if m > 0 { return String(format: String(localized: "focus.timerLabel.minutes", locale: locale), m) }
+            return String(localized: "focus.timerOption.custom", locale: locale)
         }
-        if let mins = selectedMinutes { return "Timer (\(mins) mins)" }
-        return "Select timer"
+        if let mins = selectedMinutes { return String(format: String(localized: "focus.timerLabel.minutes", locale: locale), mins) }
+        return String(localized: "focus.selectTimer", locale: locale)
+    }
+
+    /// True exactly when `timerLabel` falls into its "Select timer" fallback —
+    /// comparing against the *localized* label text would break once the
+    /// string is translated, so this mirrors the same condition directly.
+    private var isTimerUnselected: Bool {
+        !noTimeSelected && !customSelected && selectedMinutes == nil
     }
 
     private var displaySeconds: Int {
@@ -100,7 +108,7 @@ struct FocusView: View {
     }
 
     private var timerSuffix: String {
-        focusStore.targetMinutes != nil ? "remaining" : "elapsed"
+        String(localized: focusStore.targetMinutes != nil ? "focus.timer.remaining" : "focus.timer.elapsed", locale: locale)
     }
 
     private let sittingLimit: TimeInterval = 15 * 60
@@ -235,7 +243,7 @@ struct FocusView: View {
                 .font(Bocil.header(32))
                 .foregroundColor(Bocil.ink)
 
-            Text("Bocil Camera will watch you and accompany you during your deep work session.")
+            Text("focus.description")
                 .font(Bocil.mono(14))
                 .foregroundColor(Bocil.subtext)
                 .fixedSize(horizontal: false, vertical: true)
@@ -310,7 +318,7 @@ struct FocusView: View {
             Rectangle()
                 .fill(Bocil.accentSoft)
                 .frame(width: 7, height: 7)
-            Text("Bocil is watching")
+            Text("focus.watchingBadge")
                 .font(Bocil.mono(12))
                 .foregroundColor(Bocil.ink)
         }
@@ -328,7 +336,7 @@ struct FocusView: View {
             Rectangle()
                 .fill(phoneDetector.isPhoneDetected ? Color.orange : Color.gray.opacity(0.5))
                 .frame(width: 7, height: 7)
-            Text(phoneDetector.isPhoneDetected ? "On phone" : "Not on phone")
+            Text(phoneDetector.isPhoneDetected ? "focus.phone.on" : "focus.phone.off")
                 .font(Bocil.mono(12))
                 .foregroundColor(Bocil.ink)
         }
@@ -343,7 +351,15 @@ struct FocusView: View {
             Rectangle()
                 .fill(posture.currentPosture == .sitting ? Color.orange : Color.green)
                 .frame(width: 7, height: 7)
-            Text(posture.currentPosture?.rawValue ?? (posture.isCalibrated ? "—" : "Calibrating…"))
+            Group {
+                if let currentPosture = posture.currentPosture {
+                    Text(currentPosture.labelKey)
+                } else if posture.isCalibrated {
+                    Text(verbatim: "—")
+                } else {
+                    Text("focus.calibrating")
+                }
+            }
                 .font(Bocil.mono(12))
                 .foregroundColor(Bocil.ink)
         }
@@ -358,12 +374,12 @@ struct FocusView: View {
     private var controlCard: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(focusStore.sessionActive ? "DEEP WORK ACTIVE" : "DEEP WORK")
+                Text(focusStore.sessionActive ? "focus.control.activeTitle" : "focus.control.title")
                     .font(Bocil.header(20))
                     .foregroundColor(Bocil.ink)
                 Text(focusStore.sessionActive
                      ? "\(elapsedFormatted) \(timerSuffix)"
-                     : "Mute nudges and let Bocil watch quietly")
+                     : String(localized: "focus.control.mutedSubtitle", locale: locale))
                     .font(Bocil.mono(14))
                     .foregroundColor(Bocil.subtext)
             }
@@ -387,7 +403,7 @@ struct FocusView: View {
             HStack(spacing: 12) {
                 Text(timerLabel)
                     .font(Bocil.mono(13))
-                    .foregroundColor(timerLabel == "Select timer" ? Bocil.subtext : Bocil.ink)
+                    .foregroundColor(isTimerUnselected ? Bocil.subtext : Bocil.ink)
                 Image("ChevronDownPixel")
                     .renderingMode(.template)
                     .resizable()
@@ -407,12 +423,12 @@ struct FocusView: View {
 
     private var timerOptionsList: some View {
         VStack(spacing: 0) {
-            ForEach(timerOptions, id: \.label) { option in
+            ForEach(timerOptions) { option in
                 Button {
                     option.action()
                     showTimerDropdown = false
                 } label: {
-                    Text(option.label)
+                    Text(option.labelKey)
                         .font(Bocil.mono(13))
                         .foregroundColor(Bocil.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -421,7 +437,7 @@ struct FocusView: View {
                         .background(Bocil.surface)
                 }
                 .buttonStyle(.plain)
-                if option.label != timerOptions.last?.label {
+                if option.id != timerOptions.last?.id {
                     Rectangle().fill(Bocil.accentSoft).frame(height: 1)
                 }
             }
@@ -430,26 +446,27 @@ struct FocusView: View {
         .overlay(Rectangle().stroke(Bocil.accentSoft, lineWidth: 1.5))
     }
 
-    private struct TimerOption {
-        let label: String
+    private struct TimerOption: Identifiable {
+        let id: String   // stable, non-localized identity — display text is `labelKey`
+        let labelKey: LocalizedStringKey
         let action: () -> Void
     }
 
     private var timerOptions: [TimerOption] {
         [
-            TimerOption(label: "30 Minutes") {
+            TimerOption(id: "30min", labelKey: "focus.timerOption.30min") {
                 selectedMinutes = 30; noTimeSelected = false
                 customSelected = false; customHours = ""; customMinutes = ""
             },
-            TimerOption(label: "60 Minutes") {
+            TimerOption(id: "60min", labelKey: "focus.timerOption.60min") {
                 selectedMinutes = 60; noTimeSelected = false
                 customSelected = false; customHours = ""; customMinutes = ""
             },
-            TimerOption(label: "No time") {
+            TimerOption(id: "noTime", labelKey: "focus.timerOption.noTime") {
                 noTimeSelected = true; selectedMinutes = nil
                 customSelected = false; customHours = ""; customMinutes = ""
             },
-            TimerOption(label: "Custom") {
+            TimerOption(id: "custom", labelKey: "focus.timerOption.custom") {
                 showCustomPopup = true
             }
         ]
@@ -460,7 +477,7 @@ struct FocusView: View {
     @ViewBuilder
     private var sessionActionButton: some View {
         if focusStore.sessionActive {
-            Button("END SESSION") {
+            Button("focus.endSession") {
                 showEndConfirm = true
             }
             .font(Bocil.header(13))
@@ -471,7 +488,7 @@ struct FocusView: View {
             .buttonStyle(.plain)
             .contentShape(Rectangle())
         } else {
-            Button("Start") {
+            Button("common.start") {
                 guard canStart, countdownText == nil else { return }
                 beginCountdown(minutes: effectiveMinutes)
             }
@@ -644,7 +661,7 @@ struct FocusView: View {
                 }
 
             VStack(alignment: .leading, spacing: 24) {
-                Text("ENTER TIME")
+                Text("focus.customTime.title")
                     .font(Bocil.header(13))
                     .foregroundColor(Bocil.subtext)
 
@@ -669,7 +686,7 @@ struct FocusView: View {
                         }
                         .frame(width: 110, height: 80)
 
-                        Text("Hour")
+                        Text("focus.customTime.hour")
                             .font(Bocil.mono(12))
                             .foregroundColor(Bocil.subtext)
                     }
@@ -701,7 +718,7 @@ struct FocusView: View {
                         }
                         .frame(width: 110, height: 80)
 
-                        Text("Minute")
+                        Text("focus.customTime.minute")
                             .font(Bocil.mono(12))
                             .foregroundColor(Bocil.subtext)
                     }
@@ -709,7 +726,7 @@ struct FocusView: View {
 
                 HStack {
                     Spacer()
-                    Button("CANCEL") {
+                    Button("common.cancel") {
                         showCustomPopup = false
                         customSelected = false
                         customHours = ""
@@ -723,7 +740,7 @@ struct FocusView: View {
                     .buttonStyle(.plain)
                     .contentShape(Rectangle())
 
-                    Button("OK") {
+                    Button("common.ok") {
                         customSelected = true
                         selectedMinutes = nil
                         noTimeSelected = false
@@ -780,10 +797,10 @@ struct FocusView: View {
             }
 
             VStack(spacing: 8) {
-                Text("CAMERA ACCESS")
+                Text("focus.permission.title")
                     .font(Bocil.header(20))
                     .foregroundColor(Bocil.ink)
-                Text("Helps Bocil understand your presence and support your focus")
+                Text("focus.permission.subtitle")
                     .font(Bocil.mono(14))
                     .foregroundColor(Bocil.subtext)
                     .multilineTextAlignment(.center)
@@ -792,7 +809,7 @@ struct FocusView: View {
 
             VStack(spacing: 8) {
                 HStack(spacing: 12) {
-                    Button("Not now") {}
+                    Button("focus.permission.notNow") {}
                         .font(Bocil.mono(14))
                         .foregroundColor(Bocil.subtext)
                         .padding(.horizontal, 16)
@@ -800,7 +817,7 @@ struct FocusView: View {
                         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
                         .buttonStyle(.plain)
 
-                    Button("Allow Camera") {
+                    Button("focus.permission.allow") {
                         camera.start()
                         userAllowedCamera = true
                     }
@@ -834,23 +851,23 @@ struct FocusView: View {
 
     private var infoPopup: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Camera Awareness")
+            Text("focus.info.title")
                 .font(Bocil.mono(16))
                 .foregroundColor(Bocil.ink)
 
             VStack(alignment: .leading, spacing: 8) {
                 ForEach([
-                    "Detects your desk presence",
-                    "Tracks posture (sitting vs standing)",
-                    "Monitors phone use",
-                    "No footage is stored",
-                    "All processing stays on your Mac"
-                ], id: \.self) { point in
+                    "focus.info.point1",
+                    "focus.info.point2",
+                    "focus.info.point3",
+                    "focus.info.point4",
+                    "focus.info.point5"
+                ], id: \.self) { pointKey in
                     HStack(alignment: .top, spacing: 10) {
                         Text("·")
                             .font(Bocil.mono(14))
                             .foregroundColor(Bocil.accentSoft)
-                        Text(point)
+                        Text(LocalizedStringKey(pointKey))
                             .font(Bocil.mono(14))
                             .foregroundColor(Bocil.ink)
                     }

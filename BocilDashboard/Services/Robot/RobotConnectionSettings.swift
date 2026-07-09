@@ -8,15 +8,16 @@
 
 import Foundation
 import Combine
+import SwiftUI
 
 enum RobotConnectionMode: String, CaseIterable {
     case usbSerial
     case wifi
 
-    var label: String {
+    var labelKey: LocalizedStringKey {
         switch self {
-        case .usbSerial: return "USB Serial"
-        case .wifi:      return "WiFi"
+        case .usbSerial: return "settings.connection.usbSerial"
+        case .wifi:      return "settings.connection.wifi"
         }
     }
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HistoryView: View {
     @StateObject private var vm = HistoryViewModel()
+    @Environment(\.locale) private var locale
 
     @State private var selectedConversation: Conversation? = nil
 
@@ -74,7 +75,7 @@ struct HistoryView: View {
     private var loadingState: some View {
         VStack(spacing: 10) {
             ProgressView()
-            Text("Loading conversations…")
+            Text("history.loading")
                 .font(Bocil.mono(14))
                 .foregroundColor(Bocil.faint)
         }
@@ -89,7 +90,7 @@ struct HistoryView: View {
                 .foregroundColor(Bocil.danger)
             Spacer()
             Button(action: { Task { await vm.load() } }) {
-                Text("Retry")
+                Text("common.retry")
                     .font(Bocil.mono(12))
                     .foregroundColor(Bocil.ink)
                     .padding(.horizontal, 12)
@@ -106,7 +107,7 @@ struct HistoryView: View {
 
     private var header: some View {
         HStack {
-            Text("CHAT HISTORY")
+            Text("history.title")
                 .font(Bocil.header(32))
                 .foregroundColor(Bocil.ink)
 
@@ -120,8 +121,8 @@ struct HistoryView: View {
 
     private var filterLabel: String {
         switch vm.filter {
-        case .thisWeek: return "This week"
-        case .day(let d): return Self.shortDate(d)
+        case .thisWeek: return String(localized: "history.filter.thisWeek", locale: locale)
+        case .day(let d): return shortDate(d)
         }
     }
 
@@ -131,7 +132,7 @@ struct HistoryView: View {
             filterOpen.toggle()
         }) {
             HStack(spacing: 8) {
-                Text("Filter: \(filterLabel)")
+                Text(String(format: String(localized: "history.filter.prefix", locale: locale), filterLabel))
                     .font(Bocil.mono(14))
                     .foregroundColor(Bocil.accent)
                 Image("ChevronDownPixel")
@@ -160,11 +161,11 @@ struct HistoryView: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 0) {
-                dropdownRow(label: "This week", isSelected: vm.filter == .thisWeek) {
+                dropdownRow(label: "history.filter.thisWeek", isSelected: vm.filter == .thisWeek) {
                     vm.filter = .thisWeek
                     closeDropdown()
                 }
-                dropdownRow(label: "Pick date", isSelected: pickedDate != nil) {
+                dropdownRow(label: "history.filter.pickDate", isSelected: pickedDate != nil) {
                     showCalendar = true
                 }
             }
@@ -173,7 +174,7 @@ struct HistoryView: View {
     }
 
     @ViewBuilder
-    private func dropdownRow(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func dropdownRow(label: LocalizedStringKey, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
                 .font(Bocil.mono(14))
@@ -201,9 +202,9 @@ struct HistoryView: View {
 
     @ViewBuilder
     private var weekContent: some View {
-        let sections = vm.weekSections
+        let sections = vm.weekSections(locale: locale)
         if sections.isEmpty {
-            emptyState("No conversations this week")
+            emptyState(String(localized: "history.empty.week", locale: locale))
         } else {
             VStack(alignment: .leading, spacing: 20) {
                 ForEach(sections) { section in
@@ -229,7 +230,7 @@ struct HistoryView: View {
     private func dayContent(_ date: Date) -> some View {
         let items = vm.conversations(on: date)
         if items.isEmpty {
-            emptyState("No conversations on \(Self.longDate(date))")
+            emptyState(String(format: String(localized: "history.empty.day", locale: locale), longDate(date)))
         } else {
             VStack(spacing: 12) {
                 ForEach(items) { conversation in
@@ -274,7 +275,7 @@ struct HistoryView: View {
                         .font(Bocil.mono(16))
                         .foregroundColor(conversation.title == nil ? Bocil.subtext : Bocil.ink)
                 }
-                Text("\(conversation.startTimeLabel) · \(conversation.messageCount) voice messages")
+                Text("\(conversation.startTimeLabel) · \(voiceMessagesLabel(conversation.messageCount))")
                     .font(Bocil.mono(12))
                     .foregroundColor(Bocil.faint)
             }
@@ -282,7 +283,7 @@ struct HistoryView: View {
             Spacer()
 
             if isEditing {
-                Button("Save") { commitEdit(conversation) }
+                Button("common.save") { commitEdit(conversation) }
                     .font(Bocil.mono(12))
                     .foregroundColor(Bocil.onAccent)
                     .padding(.horizontal, 10)
@@ -290,7 +291,7 @@ struct HistoryView: View {
                     .background(Bocil.accentSoft)
                     .buttonStyle(.plain)
 
-                Button("Delete") {
+                Button("common.delete") {
                     vm.delete(conversation)
                     editingID = nil
                 }
@@ -364,15 +365,20 @@ struct HistoryView: View {
         .frame(minHeight: 240)
     }
 
+    private func voiceMessagesLabel(_ count: Int) -> String {
+        let key = count == 1 ? "history.voiceMessages.one" : "history.voiceMessages.other"
+        return String(format: String(localized: String.LocalizationValue(key), locale: locale), count)
+    }
+
     // MARK: - Date formatting helpers
 
-    private static func shortDate(_ date: Date) -> String {
-        let f = DateFormatter(); f.dateFormat = "MMM d"
+    private func shortDate(_ date: Date) -> String {
+        let f = DateFormatter(); f.locale = locale; f.dateFormat = "MMM d"
         return f.string(from: date)
     }
 
-    private static func longDate(_ date: Date) -> String {
-        let f = DateFormatter(); f.dateFormat = "MMM d, yyyy"
+    private func longDate(_ date: Date) -> String {
+        let f = DateFormatter(); f.locale = locale; f.dateFormat = "MMM d, yyyy"
         return f.string(from: date)
     }
 }

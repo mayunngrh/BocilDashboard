@@ -144,7 +144,7 @@ private struct FloatingBadge: View {
     }
 
     private var chipLabel: some View {
-        Text(tab.rawValue)
+        Text(tab.displayNameKey)
             .font(Bocil.header(20))
             .tracking(0.5)
             .fixedSize()

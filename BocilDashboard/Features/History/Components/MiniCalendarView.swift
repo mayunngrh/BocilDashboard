@@ -7,6 +7,12 @@ struct MiniCalendarView: View {
     let selectedDate: Date?
     let onSelect: (Date) -> Void
 
+    // DateFormatter defaults to the system locale, which wouldn't follow an
+    // in-app language override — reading the environment locale here (set at
+    // the app root from AppLanguageManager) keeps month names in sync with
+    // whatever language the user picked in Settings.
+    @Environment(\.locale) private var locale
+
     @State private var displayedMonth: Date
 
     init(selectedDate: Date?, onSelect: @escaping (Date) -> Void) {
@@ -15,14 +21,22 @@ struct MiniCalendarView: View {
         _displayedMonth = State(initialValue: selectedDate ?? Date())
     }
 
-    private static let weekLabels = ["M", "T", "W", "T", "F", "S", "S"]
+    /// Single-letter Mon–Sun initials, derived from the active locale's own
+    /// weekday symbols rather than hardcoded English ("M T W T F S S") — so
+    /// this actually reads correctly in Spanish/French/Indonesian too.
+    private var weekLabels: [String] {
+        var f = DateFormatter(); f.locale = locale
+        let symbols = f.veryShortWeekdaySymbols ?? ["M", "T", "W", "T", "F", "S", "S"]
+        // Foundation's symbols start on Sunday; rotate to Monday-first to match the grid.
+        return Array(symbols[1...] + symbols[0...0])
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
 
             HStack(spacing: 0) {
-                ForEach(Array(Self.weekLabels.enumerated()), id: \.offset) { _, w in
+                ForEach(Array(weekLabels.enumerated()), id: \.offset) { _, w in
                     Text(w)
                         .font(Bocil.mono(9))
                         .foregroundColor(Bocil.subtext)
@@ -102,7 +116,7 @@ struct MiniCalendarView: View {
     // MARK: - Helpers
 
     private var monthTitle: String {
-        let f = DateFormatter(); f.dateFormat = "MMMM yyyy"
+        let f = DateFormatter(); f.locale = locale; f.dateFormat = "MMMM yyyy"
         return f.string(from: displayedMonth).uppercased()
     }
 

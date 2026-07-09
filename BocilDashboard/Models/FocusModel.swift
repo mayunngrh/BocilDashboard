@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import SwiftUI
 
 enum FocusSession {
     static let durations: [Int] = [30, 60, 90]
@@ -71,11 +72,21 @@ enum PersonalityMode: String, CaseIterable, Hashable {
     case energetic = "ENERGETIC"
     case professional = "PROFESSIONAL"
 
-    var subtitle: String {
+    /// `rawValue` stays fixed English (used for `apiValue`/UserDefaults);
+    /// these drive what's actually shown on screen, per language.
+    var titleKey: LocalizedStringKey {
         switch self {
-        case .calm:         return "Gentle, thoughtful nudges"
-        case .energetic:    return "Uplifting, motivational"
-        case .professional: return "Direct, efficient"
+        case .calm:         return "settings.personality.calm.title"
+        case .energetic:    return "settings.personality.energetic.title"
+        case .professional: return "settings.personality.professional.title"
+        }
+    }
+
+    var subtitleKey: LocalizedStringKey {
+        switch self {
+        case .calm:         return "settings.personality.calm.subtitle"
+        case .energetic:    return "settings.personality.energetic.subtitle"
+        case .professional: return "settings.personality.professional.subtitle"
         }
     }
 
@@ -95,25 +106,65 @@ enum AppearanceMode: String, CaseIterable, Hashable {
     case light  = "LIGHT"
     case dark   = "DARK"
 
-    var subtitle: String {
+    var titleKey: LocalizedStringKey {
         switch self {
-        case .system: return "Follow your system settings"
-        case .light:  return "Always light mode"
-        case .dark:   return "Always dark mode"
+        case .system: return "settings.appearance.system.title"
+        case .light:  return "settings.appearance.light.title"
+        case .dark:   return "settings.appearance.dark.title"
+        }
+    }
+
+    var subtitleKey: LocalizedStringKey {
+        switch self {
+        case .system: return "settings.appearance.system.subtitle"
+        case .light:  return "settings.appearance.light.subtitle"
+        case .dark:   return "settings.appearance.dark.subtitle"
         }
     }
 }
 
 enum LanguageMode: String, CaseIterable, Hashable {
-    case english = "ENGLISH"
-    case spanish = "SPANISH"
-    case french  = "FRENCH"
+    case english    = "ENGLISH"
+    case spanish    = "SPANISH"
+    case french     = "FRENCH"
+    case indonesian = "INDONESIAN"
 
+    /// The row's bold header — this one *is* translated (e.g. "ENGLISH" reads
+    /// as "INGLÉS" in the Spanish UI), unlike `subtitle` below.
+    var titleKey: LocalizedStringKey {
+        switch self {
+        case .english:    return "settings.language.english.title"
+        case .spanish:    return "settings.language.spanish.title"
+        case .french:     return "settings.language.french.title"
+        case .indonesian: return "settings.language.indonesian.title"
+        }
+    }
+
+    /// Each language's own name in its own script — always shown the same
+    /// way regardless of the active app language (platform convention, same
+    /// as Apple's own language pickers: "Español" isn't translated to
+    /// "Spanish" when the UI is in English).
     var subtitle: String {
         switch self {
-        case .english: return "English (US)"
-        case .spanish: return "Español"
-        case .french:  return "Français"
+        case .english:    return "English (US)"
+        case .spanish:    return "Español"
+        case .french:     return "Français"
+        case .indonesian: return "Bahasa Indonesia"
         }
+    }
+
+    /// BCP-47 identifier used to build the `Locale` applied via
+    /// `.environment(\.locale, ...)` at the app root.
+    var localeIdentifier: String {
+        switch self {
+        case .english:    return "en"
+        case .spanish:    return "es"
+        case .french:     return "fr"
+        case .indonesian: return "id"
+        }
+    }
+
+    init(localeIdentifier: String) {
+        self = LanguageMode.allCases.first { $0.localeIdentifier == localeIdentifier } ?? .english
     }
 }

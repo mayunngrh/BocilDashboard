@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import SwiftUI
 
 /// Loads and organizes chat history for `HistoryView`.
 ///
@@ -38,8 +39,10 @@ final class HistoryViewModel: ObservableObject {
 
     /// Conversations from the last 7 days, grouped by day and ordered
     /// newest → oldest. Each section carries a human header ("Today",
-    /// "Yesterday", or the weekday + date).
-    var weekSections: [ConversationSection] {
+    /// "Yesterday", or the weekday + date). `locale` comes from the calling
+    /// view's `@Environment(\.locale)` — this ViewModel isn't a View, so it
+    /// can't read the environment override itself.
+    func weekSections(locale: Locale) -> [ConversationSection] {
         let today = calendar.startOfDay(for: Date())
         guard let cutoff = calendar.date(byAdding: .day, value: -6, to: today) else { return [] }
 
@@ -49,7 +52,7 @@ final class HistoryViewModel: ObservableObject {
         return groups.keys.sorted(by: >).map { dayStart in
             let items = (groups[dayStart] ?? []).sorted { $0.createdAt > $1.createdAt }
             return ConversationSection(
-                title: sectionTitle(for: dayStart),
+                title: sectionTitle(for: dayStart, locale: locale),
                 date: dayStart,
                 conversations: items
             )
@@ -82,10 +85,11 @@ final class HistoryViewModel: ObservableObject {
     // MARK: - Helpers
 
     /// "Today" / "Yesterday" / "Saturday 4/7" header for a day.
-    private func sectionTitle(for day: Date) -> String {
-        if calendar.isDateInToday(day) { return "Today" }
-        if calendar.isDateInYesterday(day) { return "Yesterday" }
+    private func sectionTitle(for day: Date, locale: Locale) -> String {
+        if calendar.isDateInToday(day) { return String(localized: "common.today", locale: locale) }
+        if calendar.isDateInYesterday(day) { return String(localized: "common.yesterday", locale: locale) }
         let f = DateFormatter()
+        f.locale = locale
         f.dateFormat = "EEEE d/M"
         return f.string(from: day)
     }

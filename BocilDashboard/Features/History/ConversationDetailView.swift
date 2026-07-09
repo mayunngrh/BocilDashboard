@@ -9,6 +9,7 @@ struct ConversationDetailView: View {
     let conversation: Conversation
     let onBack: () -> Void
 
+    @Environment(\.locale) private var locale
     @State private var turns: [ConversationTurn] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -60,7 +61,7 @@ struct ConversationDetailView: View {
     private var header: some View {
         HStack(spacing: 14) {
             Button(action: onBack) {
-                Text("‹ Back")
+                Text("history.detail.back")
                     .font(Bocil.mono(14))
                     .foregroundColor(Bocil.accent)
                     .padding(.horizontal, 14)
@@ -89,6 +90,7 @@ struct ConversationDetailView: View {
 
     private var dateSubtitle: String {
         let f = DateFormatter()
+        f.locale = locale
         f.dateFormat = "EEEE, MMM d · hh:mm a"
         return f.string(from: conversation.createdAt)
     }

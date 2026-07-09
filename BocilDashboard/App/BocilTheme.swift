@@ -43,6 +43,19 @@ enum Bocil {
 enum BocilTab: String, CaseIterable, Identifiable {
     case home = "HOME", calendar = "CALENDAR", focus = "BOCAM", history = "HISTORY", settings = "SETTINGS"
     var id: String { rawValue }
+
+    /// Localization key for the label shown in `TopNavBar` and the floating
+    /// orbit nav. `rawValue` stays the fixed English identity (persistence,
+    /// comparisons) — only the displayed text changes per language.
+    var displayNameKey: LocalizedStringKey {
+        switch self {
+        case .home:     return "nav.home"
+        case .calendar: return "nav.calendar"
+        case .focus:    return "nav.bocam"
+        case .history:  return "nav.history"
+        case .settings: return "nav.settings"
+        }
+    }
 }
 
 // MARK: - Top Nav Bar
@@ -58,7 +71,7 @@ struct TopNavBar: View {
                     .interpolation(.none)   // keep the pixel art crisp
                     .scaledToFit()
                     .frame(width: 30, height: 30)
-                Text("BOCIL")
+                Text(verbatim: "BOCIL")
                     .font(Bocil.header(14))
                     .foregroundColor(Bocil.accentSoft)
                     .fixedSize()
@@ -70,7 +83,7 @@ struct TopNavBar: View {
             HStack(spacing: 2) {
                 ForEach(BocilTab.allCases) { tab in
                     Button(action: { selected = tab }) {
-                        Text(tab.rawValue)
+                        Text(tab.displayNameKey)
                             .font(Bocil.header(14))
                             .tracking(0.5)
                             .fixedSize()
@@ -88,7 +101,7 @@ struct TopNavBar: View {
             HStack(spacing: 8) {
                 HStack(spacing: 6) {
                     Rectangle().fill(Bocil.accentSoft).frame(width: 7, height: 7)
-                    Text("paired").font(Bocil.mono(12)).foregroundColor(Bocil.subtext).fixedSize()
+                    Text("nav.paired").font(Bocil.mono(12)).foregroundColor(Bocil.subtext).fixedSize()
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)

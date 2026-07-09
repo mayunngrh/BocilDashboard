@@ -2,13 +2,14 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var appearanceManager: AppearanceManager
+    @EnvironmentObject private var languageManager: AppLanguageManager
+    @Environment(\.locale) private var locale
     @ObservedObject var connectionSettings: RobotConnectionSettings
     @StateObject private var memoryService = MemoryBackendService()
     @StateObject private var configService = ConfigBackendService()
     @StateObject private var backendConfig = BackendConfigStore()
 
     @State private var personality: PersonalityMode = .calm
-    @State private var language: LanguageMode       = .english
     @State private var taskReminders      = true
     @State private var calendarAlerts     = true
     @State private var remindBefore       = 10
@@ -68,7 +69,7 @@ struct SettingsView: View {
 
     private var personalityCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("PERSONALITY")
+            Text("settings.personality.title")
                 .font(Bocil.header(20))
                 .foregroundColor(Bocil.ink)
 
@@ -79,10 +80,10 @@ struct SettingsView: View {
                         Task { await configService.updatePersonality(mode.apiValue) }
                     }) {
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(mode.rawValue)
+                            Text(mode.titleKey)
                                 .font(Bocil.header(16))
                                 .foregroundColor(personality == mode ? Bocil.onAccent : Bocil.ink)
-                            Text(mode.subtitle)
+                            Text(mode.subtitleKey)
                                 .font(Bocil.mono(14))
                                 .foregroundColor(personality == mode ? Bocil.onAccent : Bocil.subtext)
                         }
@@ -104,14 +105,14 @@ struct SettingsView: View {
 
     private var connectionCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("CONNECTION")
+            Text("settings.connection.title")
                 .font(Bocil.header(20))
                 .foregroundColor(Bocil.ink)
 
             HStack(spacing: 8) {
                 ForEach(RobotConnectionMode.allCases, id: \.self) { mode in
                     Button(action: { connectionSettings.mode = mode }) {
-                        Text(mode.label)
+                        Text(mode.labelKey)
                             .font(Bocil.mono(12))
                             .foregroundColor(connectionSettings.mode == mode ? Bocil.ink : Bocil.subtext)
                             .padding(.horizontal, 12)
@@ -126,17 +127,17 @@ struct SettingsView: View {
 
             if connectionSettings.mode == .wifi {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Robot IP address")
+                    Text("settings.connection.ipAddress")
                         .font(Bocil.mono(12))
                         .foregroundColor(Bocil.subtext)
-                    TextField("e.g. 10.156.248.250", text: $connectionSettings.wifiHost)
+                    TextField("settings.connection.ipPlaceholder", text: $connectionSettings.wifiHost)
                         .textFieldStyle(.plain)
                         .font(Bocil.mono(13))
                         .foregroundColor(Bocil.ink)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
                         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
-                    Text("Shown in the ESP32 serial log at boot, under [WiFi] Connected!")
+                    Text("settings.connection.ipHint")
                         .font(Bocil.mono(10))
                         .foregroundColor(Bocil.faint)
                 }
@@ -145,7 +146,9 @@ struct SettingsView: View {
             Rectangle().fill(Bocil.hairline).frame(height: 1)
 
             HStack {
-                Text(connectionSettings.mode == .wifi ? connectionSettings.wifiHost.isEmpty ? "No IP set" : connectionSettings.wifiHost : "USB Serial")
+                Text(connectionSettings.mode == .wifi
+                     ? (connectionSettings.wifiHost.isEmpty ? String(localized: "settings.connection.noIP", locale: locale) : connectionSettings.wifiHost)
+                     : String(localized: "settings.connection.usbSerial", locale: locale))
                     .font(Bocil.mono(14))
                     .foregroundColor(Bocil.ink)
                 Spacer()
@@ -172,15 +175,15 @@ struct SettingsView: View {
         let isDefault = backendConfig.baseURL == BackendConfig.defaultBaseURL
 
         return VStack(alignment: .leading, spacing: 16) {
-            Text("BACKEND SERVER")
+            Text("settings.server.title")
                 .font(Bocil.header(20))
                 .foregroundColor(Bocil.ink)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Server URL")
+                Text("settings.server.urlLabel")
                     .font(Bocil.mono(12))
                     .foregroundColor(Bocil.subtext)
-                TextField("e.g. http://10.235.115.130:8080", text: $draftServerURL)
+                TextField("settings.server.urlPlaceholder", text: $draftServerURL)
                     .textFieldStyle(.plain)
                     .font(Bocil.mono(13))
                     .foregroundColor(Bocil.ink)
@@ -188,14 +191,14 @@ struct SettingsView: View {
                     .padding(.vertical, 8)
                     .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
                     .onSubmit { saveServerURL() }
-                Text("Where the app calls Profile, Calendar, Tasks, Memory, and History.")
+                Text("settings.server.hint")
                     .font(Bocil.mono(10))
                     .foregroundColor(Bocil.faint)
             }
 
             HStack(spacing: 8) {
                 Button(action: saveServerURL) {
-                    Text("Save")
+                    Text("common.save")
                         .font(Bocil.mono(12))
                         .foregroundColor(Bocil.onAccent)
                         .padding(.horizontal, 12)
@@ -210,7 +213,7 @@ struct SettingsView: View {
                     backendConfig.resetToDefault()
                     draftServerURL = backendConfig.baseURL
                 }) {
-                    Text("Reset to default")
+                    Text("settings.server.resetToDefault")
                         .font(Bocil.mono(12))
                         .foregroundColor(Bocil.subtext)
                         .padding(.horizontal, 12)
@@ -250,16 +253,16 @@ struct SettingsView: View {
 
     private var notificationsCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("NOTIFICATIONS")
+            Text("settings.notifications.title")
                 .font(Bocil.header(20))
                 .foregroundColor(Bocil.ink)
 
-            toggleRow(label: "Task reminders", isOn: $taskReminders)
+            toggleRow(label: "settings.notifications.taskReminders", isOn: $taskReminders)
             Rectangle().fill(Bocil.hairline).frame(height: 1)
-            toggleRow(label: "Calendar alerts", isOn: $calendarAlerts)
+            toggleRow(label: "settings.notifications.calendarAlerts", isOn: $calendarAlerts)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Remind me before")
+                Text("settings.notifications.remindBefore")
                     .font(Bocil.mono(12))
                     .foregroundColor(Bocil.subtext)
 
@@ -287,16 +290,16 @@ struct SettingsView: View {
 
     private var privacyCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("PRIVACY")
+            Text("settings.privacy.title")
                 .font(Bocil.header(20))
                 .foregroundColor(Bocil.ink)
 
-            toggleRow(label: "Camera access",
-                      caption: "Used for presence and mood in focus mode",
+            toggleRow(label: "settings.privacy.camera",
+                      caption: "settings.privacy.camera.caption",
                       isOn: $cameraAccess)
             Rectangle().fill(Bocil.hairline).frame(height: 1)
-            toggleRow(label: "Personalization data",
-                      caption: "Let's Bocil remember your profile and habits",
+            toggleRow(label: "settings.privacy.personalization",
+                      caption: "settings.privacy.personalization.caption",
                       isOn: $personalizationData)
 
             Rectangle().fill(Bocil.hairline).frame(height: 1)
@@ -320,7 +323,7 @@ struct SettingsView: View {
     private var memorySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("MEMORY")
+                Text("settings.memory.title")
                     .font(Bocil.header(20))
                     .foregroundColor(Bocil.ink)
                 Spacer()
@@ -335,7 +338,7 @@ struct SettingsView: View {
                         .font(Bocil.mono(11))
                         .foregroundColor(Bocil.danger)
                     Spacer()
-                    Button("Retry") { Task { await memoryService.fetchMemories() } }
+                    Button("common.retry") { Task { await memoryService.fetchMemories() } }
                         .font(Bocil.mono(11))
                         .foregroundColor(Bocil.ink)
                         .buttonStyle(.plain)
@@ -343,7 +346,7 @@ struct SettingsView: View {
             }
 
             if memoryService.memories.isEmpty && !memoryService.isLoading {
-                Text("Bocil hasn't remembered anything yet.")
+                Text("settings.memory.empty")
                     .font(Bocil.mono(12))
                     .foregroundColor(Bocil.faint)
             } else {
@@ -358,7 +361,7 @@ struct SettingsView: View {
             }
 
             Button(action: { Task { await memoryService.clearAll() } }) {
-                Text("Clear Bocil's memory")
+                Text("settings.memory.clear")
                     .font(Bocil.mono(12))
                     .foregroundColor(Bocil.danger)
                     .padding(.horizontal, 12)
@@ -399,7 +402,7 @@ struct SettingsView: View {
 
     private var appearanceCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("APPEARANCE")
+            Text("settings.appearance.title")
                 .font(Bocil.header(20))
                 .foregroundColor(Bocil.ink)
 
@@ -407,10 +410,10 @@ struct SettingsView: View {
                 ForEach(AppearanceMode.allCases, id: \.self) { mode in
                     Button(action: { appearanceManager.mode = mode }) {
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(mode.rawValue)
+                            Text(mode.titleKey)
                                 .font(Bocil.header(16))
                                 .foregroundColor(appearanceManager.mode == mode ? Bocil.onAccent : Bocil.ink)
-                            Text(mode.subtitle)
+                            Text(mode.subtitleKey)
                                 .font(Bocil.mono(14))
                                 .foregroundColor(appearanceManager.mode == mode ? Bocil.onAccent : Bocil.subtext)
                         }
@@ -427,25 +430,25 @@ struct SettingsView: View {
             Rectangle().fill(Bocil.hairline).frame(height: 1)
                 .padding(.vertical, 4)
 
-            Text("LANGUAGE")
+            Text("settings.language.title")
                 .font(Bocil.header(20))
                 .foregroundColor(Bocil.ink)
 
             VStack(spacing: 8) {
                 ForEach(LanguageMode.allCases, id: \.self) { mode in
-                    Button(action: { language = mode }) {
+                    Button(action: { languageManager.mode = mode }) {
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(mode.rawValue)
+                            Text(mode.titleKey)
                                 .font(Bocil.header(16))
-                                .foregroundColor(language == mode ? Bocil.onAccent : Bocil.ink)
+                                .foregroundColor(languageManager.mode == mode ? Bocil.onAccent : Bocil.ink)
                             Text(mode.subtitle)
                                 .font(Bocil.mono(14))
-                                .foregroundColor(language == mode ? Bocil.onAccent : Bocil.subtext)
+                                .foregroundColor(languageManager.mode == mode ? Bocil.onAccent : Bocil.subtext)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
-                        .background(language == mode ? Bocil.accentSoft : Bocil.surface)
+                        .background(languageManager.mode == mode ? Bocil.accentSoft : Bocil.surface)
                         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
                     }
                     .buttonStyle(.plain)
@@ -459,7 +462,7 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    private func toggleRow(label: String, caption: String? = nil, isOn: Binding<Bool>) -> some View {
+    private func toggleRow(label: LocalizedStringKey, caption: LocalizedStringKey? = nil, isOn: Binding<Bool>) -> some View {
         HStack(alignment: caption != nil ? .top : .center) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(label)
@@ -480,4 +483,5 @@ struct SettingsView: View {
 #Preview {
     SettingsView(connectionSettings: RobotConnectionSettings())
         .environmentObject(AppearanceManager())
+        .environmentObject(AppLanguageManager())
 }
