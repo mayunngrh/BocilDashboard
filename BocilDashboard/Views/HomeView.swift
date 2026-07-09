@@ -83,43 +83,12 @@ struct HomeView: View {
             .scaleEffect(0.7)
             .offset(x: 60)
 
-            // Greeting + speech bubble float on top, anchored top-leading.
-            VStack(alignment: .leading, spacing: 20) {
-                Text(greetingLine)
-                    .font(Bocil.header(36))
-                    .foregroundColor(Bocil.ink)
-
-                speechBubble
-            }
+            // Greeting floats on top, anchored top-leading.
+            Text(greetingLine)
+                .font(Bocil.header(36))
+                .foregroundColor(Bocil.ink)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var speechBubble: some View {
-        let tailH: CGFloat = 16
-        let tailW: CGFloat = 16
-
-        return VStack(alignment: .leading, spacing: 4) {
-            Text("I'm Bocil,")
-                .font(Bocil.mono(16))
-                .foregroundColor(Bocil.ink)
-            Text("ready for today?")
-                .font(Bocil.mono(16))
-                .foregroundColor(Bocil.ink)
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 16 + tailH)   // reserve space for tail below text
-        .frame(maxWidth: 260, alignment: .leading)
-        .background(
-            SpeechBubbleShape(tailHeight: tailH, tailWidth: tailW)
-                .fill(Bocil.surface)
-        )
-        .overlay(
-            SpeechBubbleShape(tailHeight: tailH, tailWidth: tailW)
-                .stroke(Bocil.accentSoft, lineWidth: 1.5)
-        )
-        .shadow(color: .black.opacity(0.16), radius: 12, x: 0, y: 6)
     }
 
     // MARK: - Right panel
