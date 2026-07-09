@@ -59,7 +59,7 @@ struct VoiceBubbleView: View {
                     .font(Bocil.mono(13))
                     .foregroundColor(isUser ? Bocil.onAccent : Bocil.ink)
             } else if message.audioURL != nil {
-                Text("Transcription unavailable")
+                Text("history.transcriptionUnavailable")
                     .font(Bocil.mono(11))
                     .italic()
                     .foregroundColor(isUser ? Bocil.onAccent.opacity(0.6) : Bocil.subtext)

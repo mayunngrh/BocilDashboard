@@ -6,10 +6,19 @@
 import Vision
 import CoreImage
 import Combine
+import SwiftUI
 
 enum Posture: String {
     case sitting = "Sitting"
     case standing = "Standing"
+
+    /// `rawValue` stays fixed English; this is what's actually displayed.
+    var labelKey: LocalizedStringKey {
+        switch self {
+        case .sitting:  return "focus.posture.sitting"
+        case .standing: return "focus.posture.standing"
+        }
+    }
 }
 
 @MainActor

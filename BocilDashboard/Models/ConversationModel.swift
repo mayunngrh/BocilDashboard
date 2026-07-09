@@ -93,8 +93,9 @@ struct Conversation: Identifiable {
     var displayTitle: String {
         if let title, !title.isEmpty { return title }
         let f = DateFormatter()
+        f.locale = CurrentLocale.value
         f.dateFormat = "MMM d"
-        return "Voice chat · \(f.string(from: createdAt))"
+        return String(format: String(localized: "history.voiceChatTitle", locale: CurrentLocale.value), f.string(from: createdAt))
     }
 
     /// Number of voice turns in this session — shown on the list card.
@@ -105,7 +106,7 @@ struct Conversation: Identifiable {
 
     /// "1:15" session length (endedAt − createdAt), or "Live" while ongoing.
     var durationLabel: String {
-        guard let endedAt else { return "Live" }
+        guard let endedAt else { return String(localized: "history.live", locale: CurrentLocale.value) }
         let total = Int(endedAt.timeIntervalSince(createdAt).rounded())
         return String(format: "%d:%02d", total / 60, total % 60)
     }
@@ -113,6 +114,7 @@ struct Conversation: Identifiable {
     /// "08:12 AM" style start time for the list card subtitle.
     var startTimeLabel: String {
         let f = DateFormatter()
+        f.locale = CurrentLocale.value
         f.dateFormat = "hh:mm a"
         return f.string(from: createdAt)
     }
