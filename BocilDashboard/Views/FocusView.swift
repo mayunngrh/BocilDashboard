@@ -22,6 +22,7 @@ struct FocusView: View {
     @StateObject private var detector = EmotionDetector()
     @StateObject private var posture = PostureDetector()
     @StateObject private var phoneDetector = PhoneDetector()
+    @StateObject private var thinkingDetector = ThinkingDetector()
     @StateObject private var robotController: AnyRobotController
 
     @State private var selectedMinutes: Int? = nil
@@ -186,6 +187,7 @@ struct FocusView: View {
                 detector.process(pixelBuffer: pixelBuffer)
                 posture.process(pixelBuffer: pixelBuffer)
                 phoneDetector.process(pixelBuffer: pixelBuffer, face: detector.lastFaceObservation)
+                thinkingDetector.process(pixelBuffer: pixelBuffer, face: detector.lastFaceObservation)
             }
         }
         .onChange(of: focusStore.pendingAutoStart) {
@@ -277,6 +279,7 @@ struct FocusView: View {
                     HStack(spacing: 8) {
                         phoneStatusBadge
                         postureStatusBadge
+                        thinkingStatusBadge
                     }
                     .padding(10)
                 }
@@ -337,6 +340,21 @@ struct FocusView: View {
                 .fill(phoneDetector.isPhoneDetected ? Color.orange : Color.gray.opacity(0.5))
                 .frame(width: 7, height: 7)
             Text(phoneDetector.isPhoneDetected ? "focus.phone.on" : "focus.phone.off")
+                .font(Bocil.mono(12))
+                .foregroundColor(Bocil.ink)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Bocil.surface.opacity(0.92))
+        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1))
+    }
+
+    private var thinkingStatusBadge: some View {
+        HStack(spacing: 5) {
+            Rectangle()
+                .fill(thinkingDetector.isThinking ? Bocil.accentSoft : Color.gray.opacity(0.5))
+                .frame(width: 7, height: 7)
+            Text(thinkingDetector.isThinking ? "focus.thinking.on" : "focus.thinking.off")
                 .font(Bocil.mono(12))
                 .foregroundColor(Bocil.ink)
         }
@@ -860,6 +878,7 @@ struct FocusView: View {
                     "focus.info.point1",
                     "focus.info.point2",
                     "focus.info.point3",
+                    "focus.info.point6",
                     "focus.info.point4",
                     "focus.info.point5"
                 ], id: \.self) { pointKey in
