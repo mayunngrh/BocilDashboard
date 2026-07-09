@@ -34,7 +34,7 @@ struct FocusView: View {
     @State private var showTimerDropdown = false
 
     @State private var showInfo = false
-    @State private var userAllowedCamera = false
+    @AppStorage("bocil.focus.camera.allowed") private var userAllowedCamera: Bool = false
 
     // Pre-session countdown ("3", "2", "1", "DEEP WORK IS STARTING")
     @State private var countdownText: String? = nil
@@ -104,7 +104,10 @@ struct FocusView: View {
     }
 
     private var elapsedFormatted: String {
-        String(format: "%02d:%02d", displaySeconds / 60, displaySeconds % 60)
+        let h = displaySeconds / 3600
+        let m = (displaySeconds % 3600) / 60
+        let s = displaySeconds % 60
+        return String(format: "%02d:%02d:%02d", h, m, s)
     }
 
     private var timerSuffix: String {
@@ -123,23 +126,24 @@ struct FocusView: View {
     var body: some View {
         ZStack {
             GeometryReader { geo in
-                let columnWidth = geo.size.width * 0.25
-
-                HStack(alignment: .top, spacing: 40) {
-                    leftPanel
-                        .frame(width: columnWidth)
-                        .padding(.top, 32)
-
+                ZStack(alignment: .topLeading) {
+                    // Camera box centered with symmetric horizontal padding.
                     rightPanel
-                        .frame(width: columnWidth * 2)
-                        .padding(.top, 32)
-                        .padding(.bottom, 32)
+                        .padding(.horizontal, geo.size.width * 0.20)
+                        .padding(.vertical, 32)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
-                    Color.clear
-                        .frame(width: columnWidth)
+                    // Title + description squeezed into a narrow left strip.
+                    HStack(spacing: 0) {
+                        leftPanel
+                            .frame(width: geo.size.width * 0.16)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 32)
+                    .padding(.leading, 32)
                 }
-                .padding(.horizontal, 32)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())
                 .onTapGesture {
                     if showInfo { showInfo = false }
@@ -187,6 +191,7 @@ struct FocusView: View {
                 posture.process(pixelBuffer: pixelBuffer)
                 phoneDetector.process(pixelBuffer: pixelBuffer, face: detector.lastFaceObservation)
             }
+            if userAllowedCamera { camera.start() }
         }
         .onChange(of: focusStore.pendingAutoStart) {
             guard focusStore.pendingAutoStart else { return }
@@ -665,6 +670,7 @@ struct FocusView: View {
                     .font(Bocil.header(13))
                     .foregroundColor(Bocil.subtext)
 
+                // Scoreboard centered
                 HStack(alignment: .bottom, spacing: 12) {
                     // Hour field
                     VStack(alignment: .leading, spacing: 8) {
@@ -677,12 +683,17 @@ struct FocusView: View {
                                         lineWidth: 2
                                     )
                                 )
-                            TextField("", text: $customHours)
+                            TextField("00", text: $customHours)
                                 .textFieldStyle(.plain)
                                 .font(Bocil.header(36))
                                 .foregroundColor(Bocil.ink)
                                 .multilineTextAlignment(.center)
                                 .focused($customTimeFocus, equals: .hours)
+                                .onChange(of: customHours) { _, newValue in
+                                    let digits = newValue.filter { $0.isNumber }
+                                    let capped = String(digits.prefix(2))
+                                    if capped != newValue { customHours = capped }
+                                }
                         }
                         .frame(width: 110, height: 80)
 
@@ -691,12 +702,12 @@ struct FocusView: View {
                             .foregroundColor(Bocil.subtext)
                     }
 
-                    // Colon dots
-                    VStack(spacing: 6) {
-                        Circle().fill(Bocil.ink).frame(width: 6, height: 6)
-                        Circle().fill(Bocil.ink).frame(width: 6, height: 6)
-                    }
-                    .padding(.bottom, 26)
+                    // Colon in Silkscreen font for pixel-square look, centered on the input boxes
+                    Text(":")
+                        .font(Bocil.header(36))
+                        .foregroundColor(Bocil.subtext)
+                        .frame(height: 80)
+                        .padding(.bottom, 22)
 
                     // Minute field
                     VStack(alignment: .leading, spacing: 8) {
@@ -715,6 +726,11 @@ struct FocusView: View {
                                 .foregroundColor(Bocil.ink)
                                 .multilineTextAlignment(.center)
                                 .focused($customTimeFocus, equals: .minutes)
+                                .onChange(of: customMinutes) { _, newValue in
+                                    let digits = newValue.filter { $0.isNumber }
+                                    let capped = String(digits.prefix(2))
+                                    if capped != newValue { customMinutes = capped }
+                                }
                         }
                         .frame(width: 110, height: 80)
 
@@ -723,8 +739,9 @@ struct FocusView: View {
                             .foregroundColor(Bocil.subtext)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .center)
 
-                HStack {
+                HStack(spacing: 0) {
                     Spacer()
                     Button("common.cancel") {
                         showCustomPopup = false
@@ -737,6 +754,8 @@ struct FocusView: View {
                     }
                     .font(Bocil.header(13))
                     .foregroundColor(Bocil.subtext)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
                     .buttonStyle(.plain)
                     .contentShape(Rectangle())
 
@@ -747,7 +766,10 @@ struct FocusView: View {
                         showCustomPopup = false
                     }
                     .font(Bocil.header(13))
-                    .foregroundColor(Bocil.accentSoft)
+                    .foregroundColor(Bocil.onAccent)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(Bocil.accentSoft)
                     .buttonStyle(.plain)
                     .contentShape(Rectangle())
                     .disabled({
@@ -787,14 +809,12 @@ struct FocusView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            ZStack {
-                Rectangle()
-                    .stroke(Bocil.cardBorder, lineWidth: 2)
-                    .frame(width: 52, height: 38)
-                Circle()
-                    .stroke(Bocil.cardBorder, lineWidth: 1.5)
-                    .frame(width: 18, height: 18)
-            }
+            Image("CameraIcon")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 52, height: 38)
+                .foregroundColor(Bocil.cardBorder)
 
             VStack(spacing: 8) {
                 Text("focus.permission.title")
@@ -808,26 +828,16 @@ struct FocusView: View {
             }
 
             VStack(spacing: 8) {
-                HStack(spacing: 12) {
-                    Button("focus.permission.notNow") {}
-                        .font(Bocil.mono(14))
-                        .foregroundColor(Bocil.subtext)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
-                        .buttonStyle(.plain)
-
-                    Button("focus.permission.allow") {
-                        camera.start()
-                        userAllowedCamera = true
-                    }
-                    .font(Bocil.mono(14))
-                    .foregroundColor(Bocil.ink)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(Bocil.accentSoft)
-                    .buttonStyle(.plain)
+                Button("focus.permission.allow") {
+                    camera.start()
+                    userAllowedCamera = true
                 }
+                .font(Bocil.mono(14))
+                .foregroundColor(Bocil.onAccent)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Bocil.accentSoft)
+                .buttonStyle(.plain)
 
                 if let error = camera.errorMessage {
                     Text(error)
