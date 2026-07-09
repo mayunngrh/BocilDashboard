@@ -19,7 +19,7 @@ final class TasksBackendService: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
 
-    private let baseURL = BackendConfig.baseURL
+    private var baseURL: String { BackendConfig.baseURL }
     private let deviceToken = BackendConfig.deviceToken
 
     func fetchTasks() async {

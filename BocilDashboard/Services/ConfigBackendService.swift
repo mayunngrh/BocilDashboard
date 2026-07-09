@@ -14,7 +14,7 @@ final class ConfigBackendService: ObservableObject {
     @Published var config: AppConfig?
     @Published var error: String?
 
-    private let baseURL = BackendConfig.baseURL
+    private var baseURL: String { BackendConfig.baseURL }
     private let deviceToken = BackendConfig.deviceToken
 
     func fetchConfig() async {

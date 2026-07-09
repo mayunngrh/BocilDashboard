@@ -53,7 +53,7 @@ enum ConversationAPIError: LocalizedError {
 // `ConversationAudioPlayer`) only when a message is actually played.
 
 final class APIConversationRepository: ConversationRepository {
-    private let baseURL = BackendConfig.baseURL
+    private var baseURL: String { BackendConfig.baseURL }
     private let deviceToken = BackendConfig.deviceToken
 
     private struct SessionDTO: Decodable {

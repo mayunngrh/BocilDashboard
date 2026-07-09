@@ -5,6 +5,7 @@ struct SettingsView: View {
     @ObservedObject var connectionSettings: RobotConnectionSettings
     @StateObject private var memoryService = MemoryBackendService()
     @StateObject private var configService = ConfigBackendService()
+    @StateObject private var backendConfig = BackendConfigStore()
 
     @State private var personality: PersonalityMode = .calm
     @State private var language: LanguageMode       = .english
@@ -14,6 +15,7 @@ struct SettingsView: View {
     @State private var cameraAccess       = true
     @State private var personalizationData = true
     @State private var hoveredMemoryID: String? = nil
+    @State private var draftServerURL: String = ""
 
     private let remindOptions = [5, 10, 15, 30]
 
@@ -32,6 +34,7 @@ struct SettingsView: View {
                 VStack(spacing: 20) {
                     personalityCard
                     connectionCard
+                    serverCard
                 }
                 .frame(maxWidth: .infinity)
 
@@ -51,6 +54,7 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { await memoryService.fetchMemories() }
         .task { await loadConfig() }
+        .onAppear { draftServerURL = backendConfig.baseURL }
     }
 
     /// Loads server config and reflects the saved personality in the UI.
@@ -152,6 +156,96 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, alignment: .top)
         .background(Bocil.surface)
         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+    }
+
+    // MARK: - Backend server
+    //
+    // BackendConfig.baseURL is what every API service (Profile, Calendar,
+    // Config, Tasks, Memory, History, audio playback) talks to — separate
+    // from `connectionCard` above, which is the robot's own WiFi/serial link.
+    // Services read BackendConfig.baseURL live (not cached at init), so a
+    // saved change here takes effect on the very next network call, no
+    // restart needed.
+
+    private var serverCard: some View {
+        let isDirty = draftServerURL.trimmingCharacters(in: .whitespacesAndNewlines) != backendConfig.baseURL
+        let isDefault = backendConfig.baseURL == BackendConfig.defaultBaseURL
+
+        return VStack(alignment: .leading, spacing: 16) {
+            Text("BACKEND SERVER")
+                .font(Bocil.header(20))
+                .foregroundColor(Bocil.ink)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Server URL")
+                    .font(Bocil.mono(12))
+                    .foregroundColor(Bocil.subtext)
+                TextField("e.g. http://10.235.115.130:8080", text: $draftServerURL)
+                    .textFieldStyle(.plain)
+                    .font(Bocil.mono(13))
+                    .foregroundColor(Bocil.ink)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+                    .onSubmit { saveServerURL() }
+                Text("Where the app calls Profile, Calendar, Tasks, Memory, and History.")
+                    .font(Bocil.mono(10))
+                    .foregroundColor(Bocil.faint)
+            }
+
+            HStack(spacing: 8) {
+                Button(action: saveServerURL) {
+                    Text("Save")
+                        .font(Bocil.mono(12))
+                        .foregroundColor(Bocil.onAccent)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(Bocil.accentSoft)
+                }
+                .buttonStyle(.plain)
+                .disabled(!isDirty || draftServerURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .opacity(isDirty ? 1 : 0.4)
+
+                Button(action: {
+                    backendConfig.resetToDefault()
+                    draftServerURL = backendConfig.baseURL
+                }) {
+                    Text("Reset to default")
+                        .font(Bocil.mono(12))
+                        .foregroundColor(Bocil.subtext)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+                }
+                .buttonStyle(.plain)
+                .disabled(isDefault)
+                .opacity(isDefault ? 0.4 : 1)
+            }
+
+            Rectangle().fill(Bocil.hairline).frame(height: 1)
+
+            // Current connection, styled like the top navbar's status pill.
+            HStack(spacing: 6) {
+                Rectangle().fill(Bocil.accentSoft).frame(width: 7, height: 7)
+                Text(backendConfig.baseURL)
+                    .font(Bocil.mono(12))
+                    .foregroundColor(Bocil.ink)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .top)
+        .background(Bocil.surface)
+        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+    }
+
+    private func saveServerURL() {
+        let trimmed = draftServerURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        backendConfig.baseURL = trimmed
+        draftServerURL = trimmed
     }
 
     private var notificationsCard: some View {

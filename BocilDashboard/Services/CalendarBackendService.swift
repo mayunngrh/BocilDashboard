@@ -21,7 +21,7 @@ final class CalendarBackendService: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
 
-    private let baseURL = BackendConfig.baseURL
+    private var baseURL: String { BackendConfig.baseURL }
     private let deviceToken = BackendConfig.deviceToken
 
     func fetchEvents(from: Date, to: Date) async {

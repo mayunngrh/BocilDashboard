@@ -16,7 +16,7 @@ final class ProfileBackendService: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
 
-    private let baseURL = BackendConfig.baseURL
+    private var baseURL: String { BackendConfig.baseURL }
     private let deviceToken = BackendConfig.deviceToken
 
     /// `GET /api/v1/profile` — the server returns a default empty profile (not
