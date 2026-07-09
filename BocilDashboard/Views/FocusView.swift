@@ -35,6 +35,21 @@ struct FocusView: View {
     @State private var showInfo = false
     @State private var userAllowedCamera = false
 
+    // Pre-session countdown ("3", "2", "1", "DEEP WORK IS STARTING")
+    @State private var countdownText: String? = nil
+    @State private var countdownTask: Task<Void, Never>? = nil
+
+    // End-of-session overlay + auto-dismiss
+    @State private var showSessionFinished = false
+    @State private var finishedDismissTask: Task<Void, Never>? = nil
+    @State private var showEndConfirm = false
+
+    // Remembers the last started duration so RESTART reuses it.
+    @State private var lastSessionMinutes: Int? = nil
+    // Distinguishes a manual END SESSION from the timer finishing naturally,
+    // so the "finished" overlay only appears when the timer runs out.
+    @State private var userEndedSession = false
+
     @State private var lastSittingAlertAt: Date?
     @State private var lastPhoneAlertAt: Date?
     private let reAlertCooldown: TimeInterval = 30
@@ -127,6 +142,10 @@ struct FocusView: View {
             if showCustomPopup {
                 customTimePopup
             }
+
+            if showEndConfirm {
+                endSessionConfirmPopup
+            }
         }
         // Dropdown is drawn here, above the entire page (camera + control card
         // and its border), and positioned from the button's published anchor —
@@ -147,7 +166,13 @@ struct FocusView: View {
                 }
             }
         }
-        .onDisappear { camera.stop() }
+        .onDisappear {
+            camera.stop()
+            countdownTask?.cancel()
+            countdownText = nil
+            finishedDismissTask?.cancel()
+            showSessionFinished = false
+        }
         .onAppear {
             camera.onFrame = { pixelBuffer in
                 detector.process(pixelBuffer: pixelBuffer)
@@ -171,6 +196,11 @@ struct FocusView: View {
         .onChange(of: focusStore.completedSessionTick) { _, _ in
             let seconds = focusStore.lastCompletedSeconds
             Task { await profileService.addFocus(seconds: seconds) }
+            if userEndedSession {
+                userEndedSession = false
+            } else {
+                presentSessionFinished()
+            }
         }
     }
 
@@ -254,6 +284,18 @@ struct FocusView: View {
                         .onTapGesture {}
                 }
             }
+            // Countdown & finished notices cover only the camera display area.
+            .overlay {
+                if showSessionFinished {
+                    sessionFinishedOverlay
+                }
+            }
+            .overlay {
+                if let text = countdownText {
+                    countdownOverlay(text)
+                }
+            }
+            .clipShape(Rectangle())
 
             if cameraActive {
                 controlCard
@@ -419,7 +461,7 @@ struct FocusView: View {
     private var sessionActionButton: some View {
         if focusStore.sessionActive {
             Button("END SESSION") {
-                focusStore.stop()
+                showEndConfirm = true
             }
             .font(Bocil.header(13))
             .foregroundColor(.white)
@@ -430,10 +472,8 @@ struct FocusView: View {
             .contentShape(Rectangle())
         } else {
             Button("Start") {
-                guard canStart else { return }
-                focusStore.start(limitMinutes: effectiveMinutes)
-                lastSittingAlertAt = nil
-                lastPhoneAlertAt = nil
+                guard canStart, countdownText == nil else { return }
+                beginCountdown(minutes: effectiveMinutes)
             }
             .font(Bocil.header(13))
             .foregroundColor(Bocil.ink)
@@ -442,6 +482,151 @@ struct FocusView: View {
             .background(canStart ? Bocil.accentSoft : Bocil.hairline)
             .buttonStyle(.plain)
             .contentShape(Rectangle())
+        }
+    }
+
+    // MARK: - Countdown & session finished
+
+    private func beginCountdown(minutes: Int?) {
+        finishedDismissTask?.cancel()
+        showSessionFinished = false
+        lastSessionMinutes = minutes
+        countdownTask?.cancel()
+        countdownTask = Task { @MainActor in
+            for step in ["3", "2", "1"] {
+                countdownText = step
+                try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { return }
+            }
+            countdownText = "DEEP WORK IS STARTING"
+            try? await Task.sleep(for: .seconds(1.2))
+            if Task.isCancelled { return }
+            countdownText = nil
+            focusStore.start(limitMinutes: minutes)
+            lastSittingAlertAt = nil
+            lastPhoneAlertAt = nil
+        }
+    }
+
+    private func presentSessionFinished() {
+        showSessionFinished = true
+        finishedDismissTask?.cancel()
+        finishedDismissTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            if !Task.isCancelled { showSessionFinished = false }
+        }
+    }
+
+    private func dismissSessionFinished() {
+        finishedDismissTask?.cancel()
+        showSessionFinished = false
+    }
+
+    private func countdownOverlay(_ text: String) -> some View {
+        ZStack {
+            Color.black.opacity(0.55)
+            Text(text)
+                .font(Bocil.header(text.count > 2 ? 32 : 96))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+                .id(text)
+                .transition(.scale(scale: 1.4).combined(with: .opacity))
+        }
+        .animation(.easeOut(duration: 0.25), value: text)
+    }
+
+    private var sessionFinishedOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.45)
+                .onTapGesture { dismissSessionFinished() }
+
+            VStack(spacing: 28) {
+                Text("YOUR DEEP WORK SESSION IS FINISHED")
+                    .font(Bocil.header(20))
+                    .foregroundColor(Bocil.ink)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 12) {
+                    Button("RESTART") {
+                        dismissSessionFinished()
+                        beginCountdown(minutes: lastSessionMinutes)
+                    }
+                    .font(Bocil.header(13))
+                    .foregroundColor(Bocil.onAccent)
+                    .padding(.horizontal, 20)
+                    .frame(height: 40)
+                    .background(Bocil.accentSoft)
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+
+                    Button("DISMISS") {
+                        dismissSessionFinished()
+                    }
+                    .font(Bocil.header(13))
+                    .foregroundColor(Bocil.subtext)
+                    .padding(.horizontal, 20)
+                    .frame(height: 40)
+                    .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                }
+            }
+            .padding(28)
+            .frame(maxWidth: 420)
+            .background(Bocil.surface)
+            .overlay(Rectangle().stroke(Bocil.accentSoft, lineWidth: 2))
+            .padding(24)
+        }
+    }
+
+    // MARK: - End session confirmation
+
+    private var endSessionConfirmPopup: some View {
+        ZStack {
+            Color.black.opacity(0.25)
+                .ignoresSafeArea()
+                .onTapGesture { showEndConfirm = false }
+
+            VStack(alignment: .leading, spacing: 20) {
+                Text("END SESSION?")
+                    .font(Bocil.header(18))
+                    .foregroundColor(Bocil.ink)
+
+                Text("Are you sure you want to end this deep work session?")
+                    .font(Bocil.mono(14))
+                    .foregroundColor(Bocil.subtext)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack {
+                    Spacer()
+                    Button("CANCEL") {
+                        showEndConfirm = false
+                    }
+                    .font(Bocil.header(13))
+                    .foregroundColor(Bocil.subtext)
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+
+                    Button("END SESSION") {
+                        showEndConfirm = false
+                        userEndedSession = true
+                        focusStore.stop()
+                    }
+                    .font(Bocil.header(13))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .frame(height: 36)
+                    .background(Bocil.danger)
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                }
+            }
+            .padding(32)
+            .frame(width: 380)
+            .background(Bocil.surface)
+            .overlay(Rectangle().stroke(Bocil.accentSoft, lineWidth: 2))
         }
     }
 
