@@ -20,13 +20,19 @@ private func daysInGrid(for month: Date) -> [CalendarDay] {
     return days
 }
 
-private let weekLabels = ["M", "T", "W", "T", "F", "S", "S"]
-
 /// The three schedule modes, like macOS Calendar's Day/Week/Month switcher.
 enum CalendarDisplayMode: String, CaseIterable {
     case today = "Today"
     case week  = "Week"
     case month = "Month"
+
+    var labelKey: LocalizedStringKey {
+        switch self {
+        case .today: return "calendar.mode.today"
+        case .week:  return "calendar.mode.week"
+        case .month: return "calendar.mode.month"
+        }
+    }
 }
 
 // MARK: - CalendarView
@@ -35,6 +41,7 @@ struct CalendarView: View {
     @EnvironmentObject private var calendarStore: CalendarStore
     @StateObject private var backendService = CalendarBackendService()
     @StateObject private var tasksService = TasksBackendService()
+    @Environment(\.locale) private var locale
 
     @State private var displayedMonth = Date()
     @State private var selectedDate   = Date()
@@ -49,6 +56,15 @@ struct CalendarView: View {
     // Drag-to-reschedule state. `dragOffsetY` is snapped to the 15-minute grid.
     @State private var draggingEventID: String? = nil
     @State private var dragOffsetY: CGFloat = 0
+
+    /// Single-letter Mon–Sun initials, derived from the active locale's own
+    /// weekday symbols (matches `MiniCalendarView`'s approach) rather than
+    /// hardcoded English.
+    private var weekLabels: [String] {
+        var f = DateFormatter(); f.locale = locale
+        let symbols = f.veryShortWeekdaySymbols ?? ["M", "T", "W", "T", "F", "S", "S"]
+        return Array(symbols[1...] + symbols[0...0])
+    }
 
     private var backendEventsForSelectedDate: [BackendCalendarEvent] {
         let cal = Calendar.current
@@ -124,7 +140,7 @@ struct CalendarView: View {
     private var leftColumn: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("TODAY")
+                Text("calendar.today")
                     .font(Bocil.header(24))
                     .foregroundColor(Bocil.ink)
                 Text(todayFormatted)
@@ -193,7 +209,7 @@ struct CalendarView: View {
             // Sync status card
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("SYNC STATUS")
+                    Text("calendar.syncStatus")
                         .font(Bocil.header(11))
                         .foregroundColor(Bocil.ink)
                     Spacer()
@@ -210,13 +226,13 @@ struct CalendarView: View {
                         .foregroundColor(Bocil.danger)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    Text("\(backendService.events.count) events loaded")
+                    Text(eventsLoadedLabel)
                         .font(Bocil.mono(11))
                         .foregroundColor(Bocil.subtext)
                 }
 
                 Button(action: refreshBackendEvents) {
-                    Text("Refresh")
+                    Text("common.refresh")
                         .font(Bocil.mono(11))
                         .foregroundColor(Bocil.ink)
                         .padding(.horizontal, 10)
@@ -281,7 +297,7 @@ struct CalendarView: View {
                 Button(action: { draft = NewEventDraft(); showAddEvent = true }) {
                     HStack(spacing: 5) {
                         Text("+").font(Bocil.header(13)).foregroundColor(Bocil.ink)
-                        Text("Add event").font(Bocil.mono(12)).foregroundColor(Bocil.ink)
+                        Text("calendar.addEvent").font(Bocil.mono(12)).foregroundColor(Bocil.ink)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 7)
@@ -316,7 +332,7 @@ struct CalendarView: View {
         HStack(spacing: 0) {
             ForEach(CalendarDisplayMode.allCases, id: \.self) { mode in
                 Button(action: { displayMode = mode }) {
-                    Text(mode.rawValue)
+                    Text(mode.labelKey)
                         .font(Bocil.mono(12))
                         .foregroundColor(displayMode == mode ? Bocil.onAccent : Bocil.subtext)
                         .padding(.horizontal, 14)
@@ -345,7 +361,7 @@ struct CalendarView: View {
             .buttonStyle(.plain)
 
             Button(action: { goToToday() }) {
-                Text("Today")
+                Text("calendar.todayButton")
                     .font(Bocil.mono(12))
                     .foregroundColor(Bocil.ink)
                     .padding(.horizontal, 10)
@@ -527,14 +543,14 @@ struct CalendarView: View {
     private var weekTitle: String {
         guard let first = weekDays.first, let last = weekDays.last else { return "" }
         let cal = Calendar.current
-        let f1 = DateFormatter(); f1.dateFormat = "MMM d"
-        let f2 = DateFormatter()
+        let f1 = DateFormatter(); f1.locale = locale; f1.dateFormat = "MMM d"
+        let f2 = DateFormatter(); f2.locale = locale
         f2.dateFormat = cal.isDate(first, equalTo: last, toGranularity: .month) ? "d, yyyy" : "MMM d, yyyy"
         return "\(f1.string(from: first)) – \(f2.string(from: last))".uppercased()
     }
 
-    private static func weekdayShortLabel(_ date: Date) -> String {
-        let f = DateFormatter(); f.dateFormat = "EEE"
+    private func weekdayShortLabel(_ date: Date) -> String {
+        let f = DateFormatter(); f.locale = locale; f.dateFormat = "EEE"
         return f.string(from: date).uppercased()
     }
 
@@ -557,7 +573,7 @@ struct CalendarView: View {
                         let isToday = cal.isDateInToday(day)
                         Button(action: { selectedDate = day; displayMode = .today }) {
                             VStack(spacing: 1) {
-                                Text(Self.weekdayShortLabel(day))
+                                Text(weekdayShortLabel(day))
                                     .font(Bocil.mono(9))
                                     .foregroundColor(isToday ? Bocil.onAccent : Bocil.subtext)
                                 Text("\(cal.component(.day, from: day))")
@@ -743,7 +759,7 @@ struct CalendarView: View {
             }
 
             if overflow > 0 {
-                Text("+\(overflow) more")
+                Text(String(format: String(localized: "calendar.moreEvents", locale: locale), overflow))
                     .font(Bocil.mono(8))
                     .foregroundColor(Bocil.faint)
                     .padding(.leading, 5)
@@ -1020,7 +1036,7 @@ struct CalendarView: View {
                         .font(Bocil.mono(11))
                         .foregroundColor(Bocil.subtext)
                 }
-                Text("Backend")
+                Text("calendar.backendTag")
                     .font(Bocil.mono(10))
                     .foregroundColor(Bocil.faint)
             }
@@ -1037,14 +1053,14 @@ struct CalendarView: View {
     private var rightPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("TASKS")
+                Text("calendar.tasks.title")
                     .font(Bocil.header(16))
                     .foregroundColor(Bocil.ink)
                 Spacer()
                 Button(action: { showAddTask = true }) {
                     HStack(spacing: 3) {
                         Text("+").font(Bocil.header(13)).foregroundColor(Bocil.ink)
-                        Text("Add").font(Bocil.mono(11)).foregroundColor(Bocil.ink)
+                        Text("common.add").font(Bocil.mono(11)).foregroundColor(Bocil.ink)
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -1061,7 +1077,7 @@ struct CalendarView: View {
                 VStack(alignment: .center, spacing: 12) {
                     ProgressView()
                         .scaleEffect(0.8)
-                    Text("Loading tasks...")
+                    Text("calendar.tasks.loading")
                         .font(Bocil.mono(11))
                         .foregroundColor(Bocil.subtext)
                 }
@@ -1075,7 +1091,7 @@ struct CalendarView: View {
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                     Button(action: { Task { await tasksService.fetchTasks() } }) {
-                        Text("Retry")
+                        Text("common.retry")
                             .font(Bocil.mono(11))
                             .foregroundColor(Bocil.ink)
                             .padding(.horizontal, 10)
@@ -1088,7 +1104,7 @@ struct CalendarView: View {
                 .padding(20)
             } else if tasksService.tasks.isEmpty {
                 VStack(alignment: .center, spacing: 12) {
-                    Text("No tasks")
+                    Text("calendar.tasks.empty")
                         .font(Bocil.mono(12))
                         .foregroundColor(Bocil.faint)
                 }
@@ -1138,7 +1154,7 @@ struct CalendarView: View {
                     .lineLimit(2)
 
                 if let due = task.dueAt {
-                    Text(Self.formatTaskDue(due))
+                    Text(formatTaskDue(due))
                         .font(Bocil.mono(9))
                         .foregroundColor(Bocil.subtext)
                 }
@@ -1185,7 +1201,7 @@ struct CalendarView: View {
                             .fixedSize(horizontal: false, vertical: true)
 
                         if event.isImportant {
-                            Text("IMPORTANT")
+                            Text("calendar.important")
                                 .font(Bocil.mono(10))
                                 .foregroundColor(Color.red)
                                 .padding(.horizontal, 6)
@@ -1199,7 +1215,7 @@ struct CalendarView: View {
 
                 Rectangle().fill(Bocil.hairline).frame(height: 1)
 
-                detailRow(asset: "CalendarPixel", text: Self.eventDateLabel(event))
+                detailRow(asset: "CalendarPixel", text: eventDateLabel(event))
                 detailRow(asset: "TimePixel", text: Self.eventTimeLabel(event))
                 if !event.location.isEmpty {
                     detailRow(asset: "IconLocation", text: event.location)
@@ -1210,7 +1226,7 @@ struct CalendarView: View {
 
                 HStack {
                     Spacer()
-                    Button("Close") { selectedEvent = nil }
+                    Button("common.close") { selectedEvent = nil }
                         .font(Bocil.mono(13)).foregroundColor(Bocil.ink)
                         .padding(.horizontal, 16).padding(.vertical, 9)
                         .background(Bocil.accentSoft)
@@ -1242,8 +1258,8 @@ struct CalendarView: View {
         }
     }
 
-    private static func eventDateLabel(_ event: BackendCalendarEvent) -> String {
-        let dayF = DateFormatter(); dayF.dateFormat = "EEE, MMM d"
+    private func eventDateLabel(_ event: BackendCalendarEvent) -> String {
+        let dayF = DateFormatter(); dayF.locale = locale; dayF.dateFormat = "EEE, MMM d"
         let cal = Calendar.current
         if cal.isDate(event.startsAt, inSameDayAs: event.endsAt) {
             return dayF.string(from: event.startsAt)
@@ -1272,16 +1288,16 @@ struct CalendarView: View {
                 .onTapGesture { showAddEvent = false }
 
             VStack(alignment: .leading, spacing: 20) {
-                Text("ADD EVENT")
+                Text("calendar.addEventPopup.title")
                     .font(Bocil.header(18))
                     .foregroundColor(Bocil.ink)
 
                 VStack(spacing: 10) {
-                    formField(label: "Title",    placeholder: "Event name", text: $draft.title)
-                    formField(label: "Location", placeholder: "Optional",   text: $draft.location)
+                    formField(label: "calendar.form.title", placeholder: "calendar.form.eventNamePlaceholder", text: $draft.title)
+                    formField(label: "calendar.form.location", placeholder: "calendar.form.optionalPlaceholder", text: $draft.location)
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Start Time").font(Bocil.mono(11)).foregroundColor(Bocil.subtext)
+                        Text("calendar.form.startTime").font(Bocil.mono(11)).foregroundColor(Bocil.subtext)
                         HStack(spacing: 8) {
                             TextField("9", text: $draft.startHourStr)
                                 .textFieldStyle(.plain).font(Bocil.mono(13)).foregroundColor(Bocil.ink)
@@ -1298,7 +1314,7 @@ struct CalendarView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("End Time").font(Bocil.mono(11)).foregroundColor(Bocil.subtext)
+                        Text("calendar.form.endTime").font(Bocil.mono(11)).foregroundColor(Bocil.subtext)
                         HStack(spacing: 8) {
                             TextField("10", text: $draft.endHourStr)
                                 .textFieldStyle(.plain).font(Bocil.mono(13)).foregroundColor(Bocil.ink)
@@ -1315,20 +1331,20 @@ struct CalendarView: View {
                     }
 
                     HStack(spacing: 12) {
-                        Text("Important").font(Bocil.mono(11)).foregroundColor(Bocil.subtext)
+                        Text("calendar.form.important").font(Bocil.mono(11)).foregroundColor(Bocil.subtext)
                         Spacer()
                         PixelToggle(isOn: $draft.isImportant)
                     }
                 }
 
                 HStack(spacing: 10) {
-                    Button("Cancel") { showAddEvent = false }
+                    Button("common.cancel") { showAddEvent = false }
                         .font(Bocil.mono(13)).foregroundColor(Bocil.subtext)
                         .padding(.horizontal, 16).padding(.vertical, 9)
                         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
                         .buttonStyle(.plain)
 
-                    Button("Add") { commitEvent() }
+                    Button("common.add") { commitEvent() }
                         .font(Bocil.mono(13)).foregroundColor(Bocil.ink)
                         .padding(.horizontal, 16).padding(.vertical, 9)
                         .background(draft.title.isEmpty ? Bocil.hairline : Bocil.accentSoft)
@@ -1344,7 +1360,7 @@ struct CalendarView: View {
     }
 
     @ViewBuilder
-    private func formField(label: String, placeholder: String, text: Binding<String>) -> some View {
+    private func formField(label: LocalizedStringKey, placeholder: LocalizedStringKey, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(Bocil.mono(11)).foregroundColor(Bocil.subtext)
             TextField(placeholder, text: text)
@@ -1358,18 +1374,18 @@ struct CalendarView: View {
     // MARK: - Helpers
 
     private var todayFormatted: String {
-        let f = DateFormatter(); f.dateFormat = "EEEE, dd MMMM yyyy"
+        let f = DateFormatter(); f.locale = locale; f.dateFormat = "EEEE, dd MMMM yyyy"
         return f.string(from: Date()).uppercased()
     }
 
     private var monthTitle: String {
-        let f = DateFormatter(); f.dateFormat = "MMMM yyyy"
+        let f = DateFormatter(); f.locale = locale; f.dateFormat = "MMMM yyyy"
         return f.string(from: displayedMonth).uppercased()
     }
 
     private var scheduleDateTitle: String {
-        if Calendar.current.isDateInToday(selectedDate) { return "TODAY'S SCHEDULE" }
-        let f = DateFormatter(); f.dateFormat = "MMM d"
+        if Calendar.current.isDateInToday(selectedDate) { return String(localized: "calendar.todaysSchedule", locale: locale) }
+        let f = DateFormatter(); f.locale = locale; f.dateFormat = "MMM d"
         return f.string(from: selectedDate).uppercased()
     }
 
@@ -1464,6 +1480,12 @@ struct CalendarView: View {
         }
     }
 
+    private var eventsLoadedLabel: String {
+        let count = backendService.events.count
+        let key = count == 1 ? "calendar.eventsLoaded.one" : "calendar.eventsLoaded.other"
+        return String(format: String(localized: String.LocalizationValue(key), locale: locale), count)
+    }
+
     private func refreshBackendEvents() {
         Task {
             let calendar = Calendar.current
@@ -1480,22 +1502,22 @@ struct CalendarView: View {
                 .onTapGesture { showAddTask = false }
 
             VStack(alignment: .leading, spacing: 16) {
-                Text("ADD TASK")
+                Text("calendar.addTaskPopup.title")
                     .font(Bocil.header(18))
                     .foregroundColor(Bocil.ink)
 
                 VStack(spacing: 10) {
-                    formField(label: "Title", placeholder: "Task name", text: $taskTitle)
+                    formField(label: "calendar.form.title", placeholder: "calendar.form.taskNamePlaceholder", text: $taskTitle)
                 }
 
                 HStack(spacing: 10) {
-                    Button("Cancel") { showAddTask = false }
+                    Button("common.cancel") { showAddTask = false }
                         .font(Bocil.mono(13)).foregroundColor(Bocil.subtext)
                         .padding(.horizontal, 16).padding(.vertical, 9)
                         .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
                         .buttonStyle(.plain)
 
-                    Button("Add") { commitTask() }
+                    Button("common.add") { commitTask() }
                         .font(Bocil.mono(13)).foregroundColor(Bocil.ink)
                         .padding(.horizontal, 16).padding(.vertical, 9)
                         .background(taskTitle.isEmpty ? Bocil.hairline : Bocil.accentSoft)
@@ -1528,9 +1550,10 @@ struct CalendarView: View {
 
     /// "Jul 7, 11:00 AM" from the task's raw ISO 8601 `dueAt`; falls back to the
     /// raw string if it doesn't parse (defensive against a future format change).
-    private static func formatTaskDue(_ dueAt: String) -> String {
+    private func formatTaskDue(_ dueAt: String) -> String {
         guard let date = ISO8601DateFormatter().date(from: dueAt) else { return dueAt }
         let f = DateFormatter()
+        f.locale = locale
         f.dateFormat = "MMM d, h:mm a"
         return f.string(from: date)
     }

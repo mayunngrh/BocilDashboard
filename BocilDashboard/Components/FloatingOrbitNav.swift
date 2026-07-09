@@ -95,7 +95,7 @@ private struct FloatingBadge: View {
 
     var body: some View {
         Button(action: action) {
-            Text(tab.rawValue)
+            Text(tab.displayNameKey)
                 .font(Bocil.header(20))
                 .tracking(0.5)
                 .fixedSize()

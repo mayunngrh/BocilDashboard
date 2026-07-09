@@ -14,6 +14,10 @@ struct HomeView: View {
 
     @EnvironmentObject private var focusStore:     FocusStore
     @EnvironmentObject private var profileService: ProfileBackendService
+    // String(localized:) does NOT follow .environment(\.locale) automatically
+    // (unlike Text(LocalizedStringKey)) — it needs the locale passed explicitly,
+    // which is why every String(localized:) call below passes `locale: locale`.
+    @Environment(\.locale) private var locale
 
     // The summary reads live backend data, not the local CalendarStore.
     @StateObject private var calendarBackend = CalendarBackendService()
@@ -100,10 +104,10 @@ struct HomeView: View {
         let tailW: CGFloat = 16
 
         return VStack(alignment: .leading, spacing: 4) {
-            Text("I'm Bocil,")
+            Text("home.speechBubble.line1")
                 .font(Bocil.mono(16))
                 .foregroundColor(Bocil.ink)
-            Text("ready for today?")
+            Text("home.speechBubble.line2")
                 .font(Bocil.mono(16))
                 .foregroundColor(Bocil.ink)
         }
@@ -137,14 +141,14 @@ struct HomeView: View {
     private var whoAmICard: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("WHO AM I WORKING WITH TODAY?")
+                Text("home.whoAmI.title")
                     .font(Bocil.header(16))
                     .foregroundColor(Bocil.ink)
                 Spacer()
                 Button(action: toggleEditing) {
                     Group {
                         if isEditing {
-                            Text("Save")
+                            Text("common.save")
                                 .font(Bocil.mono(14))
                         } else {
                             Image("PencilPixel")
@@ -169,12 +173,12 @@ struct HomeView: View {
 
             Group {
                 if isEditing {
-                    TextField("Type your name", text: $draftName)
+                    TextField("home.whoAmI.namePlaceholder", text: $draftName)
                         .textFieldStyle(.plain)
                         .focused($nameFocused)
                         .onSubmit { roleFocused = true }
                 } else {
-                    Text(userName.isEmpty ? "Type your name" : userName)
+                    Text(userName.isEmpty ? String(localized: "home.whoAmI.namePlaceholder", locale: locale) : userName)
                         .foregroundColor(userName.isEmpty ? Bocil.faint : Bocil.ink)
                 }
             }
@@ -187,17 +191,17 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Group {
                     if isEditing {
-                        TextField("Tell me about your role.", text: $draftRole)
+                        TextField("home.whoAmI.rolePlaceholder", text: $draftRole)
                             .textFieldStyle(.plain)
                             .focused($roleFocused)
                             .onSubmit { toggleEditing() }
                     } else {
-                        Text(roleText.isEmpty ? "Tell me about your role." : roleText)
+                        Text(roleText.isEmpty ? String(localized: "home.whoAmI.rolePlaceholder", locale: locale) : roleText)
                             .foregroundColor(roleText.isEmpty ? Bocil.faint : Bocil.ink)
                     }
                 }
                 .font(Bocil.mono(18))
-                Text("e.g. student, remote worker, founder,...")
+                Text("home.whoAmI.roleHint")
                     .font(Bocil.mono(14))
                     .foregroundColor(Bocil.faint)
             }
@@ -236,7 +240,7 @@ struct HomeView: View {
 
     private var summaryCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("TODAY'S SUMMARY")
+            Text("home.summary.title")
                 .font(Bocil.header(16))
                 .foregroundColor(Bocil.ink)
                 .padding(.horizontal, 20)
@@ -247,8 +251,9 @@ struct HomeView: View {
             summaryRow(
                 icon:   "CalendarPixel",
                 value:  todayEventCount == 0 ? "0" : "\(todayEventCount)",
-                label:  todayEventCount == 0 ? "nothing scary yet"
-                        : todayEventCount == 1 ? "event today" : "events today",
+                label:  todayEventCount == 0 ? String(localized: "home.summary.calendar.empty", locale: locale)
+                        : todayEventCount == 1 ? String(localized: "home.summary.calendar.one", locale: locale)
+                        : String(localized: "home.summary.calendar.other", locale: locale),
                 sub:    hasUpcomingEvent ? minsUntilNextText : "",
                 empty:  todayEventCount == 0,
                 action: onOpenCalendar
@@ -257,9 +262,10 @@ struct HomeView: View {
             summaryRow(
                 icon:   "ListPixel",
                 value:  openTaskCount == 0 ? "0" : "\(openTaskCount)",
-                label:  openTaskCount == 0 ? "looks pretty chill"
-                        : openTaskCount == 1 ? "tiny quest" : "tiny quests",
-                sub:    openTaskCount == 0 ? "" : "to do",
+                label:  openTaskCount == 0 ? String(localized: "home.summary.tasks.empty", locale: locale)
+                        : openTaskCount == 1 ? String(localized: "home.summary.tasks.one", locale: locale)
+                        : String(localized: "home.summary.tasks.other", locale: locale),
+                sub:    openTaskCount == 0 ? "" : String(localized: "home.summary.tasks.sub", locale: locale),
                 empty:  openTaskCount == 0,
                 action: onOpenCalendar
             )
@@ -267,8 +273,9 @@ struct HomeView: View {
             summaryRow(
                 icon:   "TimePixel",
                 value:  focusMinutes == 0 ? "0h" : focusValueText,
-                label:  focusMinutes == 0 ? "you haven't locked in today" : "focus time spent",
-                sub:    focusMinutes == 0 ? "" : "today",
+                label:  focusMinutes == 0 ? String(localized: "home.summary.focus.empty", locale: locale)
+                        : String(localized: "home.summary.focus.label", locale: locale),
+                sub:    focusMinutes == 0 ? "" : String(localized: "common.today", locale: locale),
                 empty:  focusMinutes == 0,
                 action: onOpenFocus
             )
@@ -312,9 +319,14 @@ struct HomeView: View {
 
     private var minsUntilNextText: String {
         let now = Date()
-        guard let next = todayBackendEvents.first(where: { $0.startsAt > now }) else { return "today" }
+        guard let next = todayBackendEvents.first(where: { $0.startsAt > now }) else {
+            return String(localized: "common.today", locale: locale)
+        }
         let mins = max(1, Int(next.startsAt.timeIntervalSince(now) / 60))
-        return mins < 60 ? "in \(mins) min" : "in \(mins / 60)h \(mins % 60)m"
+        if mins < 60 {
+            return String(format: String(localized: "home.summary.inMinutes", locale: locale), mins)
+        }
+        return String(format: String(localized: "home.summary.inHoursMinutes", locale: locale), mins / 60, mins % 60)
     }
 
     private var focusValueText: String {
@@ -328,15 +340,15 @@ struct HomeView: View {
     private var ctaCard: some View {
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Ready to lock in?")
+                Text("home.cta.title")
                     .font(Bocil.header(16))
                     .foregroundColor(Bocil.ink)
-                Text("Let me accompany you")
+                Text("home.cta.subtitle")
                     .font(Bocil.mono(16))
                     .foregroundColor(Bocil.subtext)
             }
             Spacer()
-            Button("Start") { onStartFocus() }
+            Button("common.start") { onStartFocus() }
                 .font(Bocil.mono(16))
                 .foregroundColor(Bocil.onAccent)
                 .padding(.horizontal, 22)
@@ -356,10 +368,10 @@ struct HomeView: View {
         let name = userName.trimmingCharacters(in: .whitespaces)
         let prefix: String
         switch Calendar.current.component(.hour, from: Date()) {
-        case 5..<12:  prefix = "GOOD MORNING"
-        case 12..<17: prefix = "GOOD AFTERNOON"
-        case 17..<21: prefix = "GOOD EVENING"
-        default:       prefix = "GOOD NIGHT"
+        case 5..<12:  prefix = String(localized: "home.greeting.morning", locale: locale)
+        case 12..<17: prefix = String(localized: "home.greeting.afternoon", locale: locale)
+        case 17..<21: prefix = String(localized: "home.greeting.evening", locale: locale)
+        default:       prefix = String(localized: "home.greeting.night", locale: locale)
         }
         return name.isEmpty ? "\(prefix)." : "\(prefix), \(name.uppercased())."
     }
