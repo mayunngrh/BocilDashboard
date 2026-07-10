@@ -112,10 +112,14 @@ struct CalendarView: View {
             Task {
                 await refreshEvents()
                 await tasksService.fetchTasks()
+                await rescheduleReminders()
             }
         }
         .onChange(of: displayedMonth) { _, _ in
-            Task { await refreshEvents() }
+            Task {
+                await refreshEvents()
+                await rescheduleReminders()
+            }
         }
         // Week-mode arrows can walk `selectedDate` across a month boundary;
         // keep `displayedMonth` (mini calendar + fetch window) following it.
@@ -135,6 +139,16 @@ struct CalendarView: View {
         let from = calendar.date(byAdding: .day, value: -7, to: startOfMonth)!
         let to = calendar.date(byAdding: .day, value: 7, to: endOfMonth)!
         await backendService.fetchEvents(from: from, to: to)
+    }
+
+    /// Re-derives the local reminder queue from whatever tasks/events are
+    /// currently loaded. Cheap to call after any mutation — it always clears
+    /// and rebuilds rather than diffing.
+    private func rescheduleReminders() async {
+        await LocalReminderScheduler.shared.reschedule(
+            tasks: tasksService.tasks,
+            events: backendService.events
+        )
     }
 
     // MARK: - Left column
@@ -1131,7 +1145,10 @@ struct CalendarView: View {
     @ViewBuilder
     private func taskRow(_ task: BackendTask) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Button(action: { Task { await tasksService.toggleCompletion(task) } }) {
+            Button(action: { Task {
+                await tasksService.toggleCompletion(task)
+                await rescheduleReminders()
+            } }) {
                 ZStack {
                     Rectangle()
                         .fill((task.completed ?? false) ? Bocil.ink : Color.clear)
@@ -1163,7 +1180,10 @@ struct CalendarView: View {
             }
             Spacer()
 
-            Button(action: { Task { await tasksService.deleteTask(task) } }) {
+            Button(action: { Task {
+                await tasksService.deleteTask(task)
+                await rescheduleReminders()
+            } }) {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(Bocil.faint)
@@ -1477,6 +1497,7 @@ struct CalendarView: View {
                         let endOfMonth = calendar.date(byAdding: .month, value: 1, to: startOfMonth)!
                         print("[CalendarView] Refreshing calendar events...")
                         await backendService.fetchEvents(from: startOfMonth, to: endOfMonth)
+                        await rescheduleReminders()
                     }
                 }
             } catch {
@@ -1551,6 +1572,7 @@ struct CalendarView: View {
 
         Task {
             await tasksService.addTask(title: taskTitle)
+            await rescheduleReminders()
             DispatchQueue.main.async {
                 showAddTask = false
                 taskTitle = ""

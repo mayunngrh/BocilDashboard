@@ -121,6 +121,17 @@ enum AppearanceMode: String, CaseIterable, Hashable {
         case .dark:   return "settings.appearance.dark.subtitle"
         }
     }
+
+    /// CONFIG_API.md's `appearance` enum is lowercase (`system`|`light`|`dark`),
+    /// distinct from `rawValue` which stays uppercase for UserDefaults persistence.
+    var apiValue: String { rawValue.lowercased() }
+
+    init?(apiValue: String) {
+        guard let mode = AppearanceMode.allCases.first(where: {
+            $0.rawValue.lowercased() == apiValue.lowercased()
+        }) else { return nil }
+        self = mode
+    }
 }
 
 enum LanguageMode: String, CaseIterable, Hashable {

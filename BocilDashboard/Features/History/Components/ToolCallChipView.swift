@@ -31,6 +31,9 @@ struct ToolCallChipView: View {
         case "calendar": return "📅"
         case "tasks": return "☑︎"
         case "web_search": return "🔎"
+        case "persona": return "🎭"
+        case "emotion": return "🙂"
+        case "move": return "🤖"
         default: return "⚙︎"
         }
     }

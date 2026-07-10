@@ -7,13 +7,20 @@ struct NotificationsConfig: Codable {
     let remindBeforeMinutes: Int?
 }
 
+struct PrivacyConfig: Codable {
+    let cameraAccess: Bool?
+    let personalizationData: Bool?
+}
+
 // A subset of GET /api/v1/config — only the fields the app reads. Codable
-// ignores the rest (connection, privacy) until they're wired up.
+// ignores `connection` — it's a hardcoded mock per CONFIG_API.md, nothing to
+// read or write there.
 struct AppConfig: Codable {
     let appearance: String?
     let personality: String?
     let language: String?
     let notifications: NotificationsConfig?
+    let privacy: PrivacyConfig?
 }
 
 @MainActor
@@ -55,6 +62,25 @@ final class ConfigBackendService: ObservableObject {
         if let remindBeforeMinutes { notif["remindBeforeMinutes"] = remindBeforeMinutes }
 
         await patchNested(["notifications": notif])
+    }
+
+    /// Update privacy settings. `personalizationData` also gates the AI's
+    /// memory tool server-side (MEMORY_API.md) — toggling it here is what
+    /// actually stops/resumes memory writes, not just a local UI flag.
+    func updatePrivacy(
+        cameraAccess: Bool? = nil,
+        personalizationData: Bool? = nil
+    ) async {
+        var priv: [String: Any] = [:]
+        if let cameraAccess { priv["cameraAccess"] = cameraAccess }
+        if let personalizationData { priv["personalizationData"] = personalizationData }
+
+        await patchNested(["privacy": priv])
+    }
+
+    /// `appearance` is `system` | `light` | `dark` — same enum as AppearanceMode.rawValue.
+    func updateAppearance(_ value: String) async {
+        await patch(["appearance": value])
     }
 
     private func patch(_ fields: [String: String]) async {

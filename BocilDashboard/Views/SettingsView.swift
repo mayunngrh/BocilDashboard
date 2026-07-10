@@ -8,6 +8,13 @@ struct SettingsView: View {
     @StateObject private var memoryService = MemoryBackendService()
     @StateObject private var configService = ConfigBackendService()
     @StateObject private var backendConfig = BackendConfigStore()
+    @StateObject private var personaService = PersonaBackendService()
+    @ObservedObject private var reminderScheduler = LocalReminderScheduler.shared
+    // One-shot fetchers used only to re-derive the reminder queue when a
+    // notification toggle changes — CalendarView owns the "real" instances
+    // that back the UI.
+    @StateObject private var reminderTasksService = TasksBackendService()
+    @StateObject private var reminderEventsService = CalendarBackendService()
 
     @State private var personality: PersonalityMode = .calm
     @State private var taskReminders      = true
@@ -17,6 +24,15 @@ struct SettingsView: View {
     @State private var personalizationData = true
     @State private var hoveredMemoryID: String? = nil
     @State private var draftServerURL: String = ""
+
+    // Persona editor overlay. `personaEditorTarget` distinguishes create vs edit:
+    // .none = closed, .creating = new character, .editing(name) = existing.
+    @State private var personaEditorMode: PersonaEditorMode? = nil
+
+    enum PersonaEditorMode: Equatable {
+        case creating
+        case editing(String)
+    }
 
     private let remindOptions = [5, 10, 15, 30]
 
@@ -41,6 +57,7 @@ struct SettingsView: View {
 
                 VStack(spacing: 20) {
                     notificationsCard
+                    charactersCard
                     privacyCard
                 }
                 .frame(maxWidth: .infinity)
@@ -55,7 +72,27 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task { await memoryService.fetchMemories() }
         .task { await loadConfig() }
+        // Re-fetch personas every time Settings appears — the active character
+        // can change server-side via voice, so the app never trusts a cache.
+        .task { await personaService.fetchPersonas() }
+        .task { await refreshReminderQueue() }
         .onAppear { draftServerURL = backendConfig.baseURL }
+        .overlay {
+            switch personaEditorMode {
+            case .creating:
+                PersonaEditorView(service: personaService, editingName: nil) {
+                    personaEditorMode = nil
+                    Task { await personaService.fetchPersonas() }
+                }
+            case .editing(let name):
+                PersonaEditorView(service: personaService, editingName: name) {
+                    personaEditorMode = nil
+                    Task { await personaService.fetchPersonas() }
+                }
+            case .none:
+                EmptyView()
+            }
+        }
     }
 
     /// Loads server config and reflects the saved personality and notification settings in the UI.
@@ -80,6 +117,41 @@ struct SettingsView: View {
                 self.remindBefore = remindBefore
             }
         }
+
+        // Load privacy settings — personalizationData in particular gates the
+        // AI's memory tool server-side, so the toggle must reflect real state.
+        if let priv = configService.config?.privacy {
+            if let camera = priv.cameraAccess {
+                cameraAccess = camera
+            }
+            if let personalization = priv.personalizationData {
+                personalizationData = personalization
+            }
+        }
+
+        // Load appearance
+        if let value = configService.config?.appearance,
+           let mode = AppearanceMode(apiValue: value) {
+            appearanceManager.mode = mode
+        }
+    }
+
+    /// Pulls a fresh copy of tasks/events and re-derives the local reminder
+    /// queue — called whenever a notification setting changes so the queued
+    /// count updates immediately, without waiting for Calendar to reload.
+    private func refreshReminderQueue() async {
+        async let tasksFetch: Void = reminderTasksService.fetchTasks()
+        let calendar = Calendar.current
+        let now = Date()
+        let from = calendar.date(byAdding: .day, value: -1, to: now)!
+        let to = calendar.date(byAdding: .month, value: 2, to: now)!
+        async let eventsFetch: Void = reminderEventsService.fetchEvents(from: from, to: to)
+        _ = await (tasksFetch, eventsFetch)
+
+        await LocalReminderScheduler.shared.reschedule(
+            tasks: reminderTasksService.tasks,
+            events: reminderEventsService.events
+        )
     }
 
     private var personalityCard: some View {
@@ -266,6 +338,112 @@ struct SettingsView: View {
         draftServerURL = trimmed
     }
 
+    // MARK: - Characters (personas)
+    //
+    // Distinct from Personality above: personas are named characters (pirate,
+    // grumpy, …) with editable markdown. The active one can change server-side
+    // via voice, so this list is re-fetched on every Settings appearance.
+
+    private var charactersCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("settings.characters.title")
+                    .font(Bocil.header(20))
+                    .foregroundColor(Bocil.ink)
+                Spacer()
+                if personaService.isLoading {
+                    ProgressView().scaleEffect(0.6)
+                }
+            }
+
+            if let error = personaService.error {
+                HStack(spacing: 12) {
+                    Text(error)
+                        .font(Bocil.mono(11))
+                        .foregroundColor(Bocil.danger)
+                    Spacer()
+                    Button("common.retry") { Task { await personaService.fetchPersonas() } }
+                        .font(Bocil.mono(11))
+                        .foregroundColor(Bocil.ink)
+                        .buttonStyle(.plain)
+                }
+            }
+
+            // "None" row — clears back to the plain personality.
+            characterRow(name: nil, label: String(localized: "settings.characters.none", locale: locale),
+                         isActive: personaService.active == nil, editable: false)
+
+            if personaService.available.isEmpty && !personaService.isLoading {
+                Text("settings.characters.empty")
+                    .font(Bocil.mono(12))
+                    .foregroundColor(Bocil.faint)
+            } else {
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(personaService.available, id: \.self) { name in
+                            characterRow(name: name, label: name,
+                                         isActive: personaService.active == name, editable: true)
+                        }
+                    }
+                }
+                .frame(maxHeight: 180)
+            }
+
+            Button(action: { personaEditorMode = .creating }) {
+                Text("settings.characters.new")
+                    .font(Bocil.mono(12))
+                    .foregroundColor(Bocil.ink)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .top)
+        .background(Bocil.surface)
+        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+    }
+
+    /// One persona row: tap the name to activate, pencil to edit. `name == nil`
+    /// is the "None" row (deactivate); it has no edit affordance.
+    private func characterRow(name: String?, label: String, isActive: Bool, editable: Bool) -> some View {
+        HStack(spacing: 10) {
+            Button(action: { Task { await personaService.activate(name) } }) {
+                HStack(spacing: 8) {
+                    Rectangle()
+                        .fill(isActive ? Bocil.accentSoft : Color.clear)
+                        .frame(width: 8, height: 8)
+                        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1))
+                    Text(label)
+                        .font(Bocil.mono(13))
+                        .foregroundColor(Bocil.ink)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if editable, let name {
+                Button(action: { personaEditorMode = .editing(name) }) {
+                    Image("PencilPixel")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 12, height: 12)
+                        .foregroundColor(Bocil.subtext)
+                        .frame(width: 26, height: 26)
+                        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(isActive ? Bocil.accentSoft.opacity(0.15) : Bocil.bg)
+        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
+    }
+
     private var notificationsCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("settings.notifications.title")
@@ -274,14 +452,20 @@ struct SettingsView: View {
 
             toggleRow(label: "settings.notifications.taskReminders", isOn: $taskReminders)
                 .onChange(of: taskReminders) { _, newValue in
-                    Task { await configService.updateNotifications(taskReminders: newValue) }
+                    Task {
+                        await configService.updateNotifications(taskReminders: newValue)
+                        await refreshReminderQueue()
+                    }
                 }
 
             Rectangle().fill(Bocil.hairline).frame(height: 1)
 
             toggleRow(label: "settings.notifications.calendarAlerts", isOn: $calendarAlerts)
                 .onChange(of: calendarAlerts) { _, newValue in
-                    Task { await configService.updateNotifications(calendarAlerts: newValue) }
+                    Task {
+                        await configService.updateNotifications(calendarAlerts: newValue)
+                        await refreshReminderQueue()
+                    }
                 }
 
             VStack(alignment: .leading, spacing: 10) {
@@ -293,7 +477,10 @@ struct SettingsView: View {
                     ForEach(remindOptions, id: \.self) { min in
                         Button(action: {
                             remindBefore = min
-                            Task { await configService.updateNotifications(remindBeforeMinutes: min) }
+                            Task {
+                                await configService.updateNotifications(remindBeforeMinutes: min)
+                                await refreshReminderQueue()
+                            }
                         }) {
                             Text("\(min)m")
                                 .font(Bocil.mono(12))
@@ -307,6 +494,12 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            Rectangle().fill(Bocil.hairline).frame(height: 1)
+
+            Text(String(format: String(localized: "settings.notifications.queued", locale: locale), reminderScheduler.queuedCount))
+                .font(Bocil.mono(11))
+                .foregroundColor(Bocil.faint)
         }
         .padding(24)
         .frame(maxWidth: .infinity, alignment: .top)
@@ -323,10 +516,18 @@ struct SettingsView: View {
             toggleRow(label: "settings.privacy.camera",
                       caption: "settings.privacy.camera.caption",
                       isOn: $cameraAccess)
+                .onChange(of: cameraAccess) { _, newValue in
+                    Task { await configService.updatePrivacy(cameraAccess: newValue) }
+                }
+
             Rectangle().fill(Bocil.hairline).frame(height: 1)
+
             toggleRow(label: "settings.privacy.personalization",
                       caption: "settings.privacy.personalization.caption",
                       isOn: $personalizationData)
+                .onChange(of: personalizationData) { _, newValue in
+                    Task { await configService.updatePrivacy(personalizationData: newValue) }
+                }
 
             Rectangle().fill(Bocil.hairline).frame(height: 1)
                 .padding(.vertical, 4)
@@ -434,7 +635,10 @@ struct SettingsView: View {
 
             VStack(spacing: 8) {
                 ForEach(AppearanceMode.allCases, id: \.self) { mode in
-                    Button(action: { appearanceManager.mode = mode }) {
+                    Button(action: {
+                        appearanceManager.mode = mode
+                        Task { await configService.updateAppearance(mode.apiValue) }
+                    }) {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(mode.titleKey)
                                 .font(Bocil.header(16))
