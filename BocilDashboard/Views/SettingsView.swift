@@ -16,7 +16,6 @@ struct SettingsView: View {
     @StateObject private var reminderTasksService = TasksBackendService()
     @StateObject private var reminderEventsService = CalendarBackendService()
 
-    @State private var personality: PersonalityMode = .calm
     @State private var taskReminders      = true
     @State private var calendarAlerts     = true
     @State private var remindBefore       = 10
@@ -49,7 +48,7 @@ struct SettingsView: View {
         ScrollView {
             HStack(alignment: .top, spacing: 24) {
                 VStack(spacing: 20) {
-                    personalityCard
+                    charactersCard
                     connectionCard
                     serverCard
                 }
@@ -57,7 +56,6 @@ struct SettingsView: View {
 
                 VStack(spacing: 20) {
                     notificationsCard
-                    charactersCard
                     privacyCard
                 }
                 .frame(maxWidth: .infinity)
@@ -95,15 +93,9 @@ struct SettingsView: View {
         }
     }
 
-    /// Loads server config and reflects the saved personality and notification settings in the UI.
+    /// Loads server config and reflects the saved notification/privacy/appearance settings in the UI.
     private func loadConfig() async {
         await configService.fetchConfig()
-
-        // Load personality
-        if let value = configService.config?.personality,
-           let mode = PersonalityMode(apiValue: value) {
-            personality = mode
-        }
 
         // Load notification settings
         if let notif = configService.config?.notifications {
@@ -152,42 +144,6 @@ struct SettingsView: View {
             tasks: reminderTasksService.tasks,
             events: reminderEventsService.events
         )
-    }
-
-    private var personalityCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("settings.personality.title")
-                .font(Bocil.header(20))
-                .foregroundColor(Bocil.ink)
-
-            VStack(spacing: 8) {
-                ForEach(PersonalityMode.allCases, id: \.self) { mode in
-                    Button(action: {
-                        personality = mode
-                        Task { await configService.updatePersonality(mode.apiValue) }
-                    }) {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(mode.titleKey)
-                                .font(Bocil.header(16))
-                                .foregroundColor(personality == mode ? Bocil.onAccent : Bocil.ink)
-                            Text(mode.subtitleKey)
-                                .font(Bocil.mono(14))
-                                .foregroundColor(personality == mode ? Bocil.onAccent : Bocil.subtext)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(personality == mode ? Bocil.accentSoft : Bocil.surface)
-                        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity, alignment: .top)
-        .background(Bocil.surface)
-        .overlay(Rectangle().stroke(Bocil.cardBorder, lineWidth: 1.5))
     }
 
     private var connectionCard: some View {
